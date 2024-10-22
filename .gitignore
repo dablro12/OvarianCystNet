@@ -594,3 +594,7 @@ model/**.ipynb
 
 
 .gitignore
+
+checkpoints
+checkpoints/**
+checkpoints/**/**
