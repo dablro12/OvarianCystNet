@@ -130,14 +130,11 @@ class Custom_pcos_dataset(Dataset):
             mask_path = self.mask_paths[idx]
             mask = Image.open(mask_path).convert('L')  # Keep mask as grayscale
         else:
-            mask = Image.new('L', image.size)
+            mask = Image.new('L', image.size) # 껍데기 mask
 
         
         if self.joint_transform:
-            if self.mask_use:
-                image, mask = self.joint_transform(image, mask)
-            else:
-                image, mask = self.joint_transform(image, mask)  # Apply joint transform to image only
+            image, mask = self.joint_transform(image, mask)
                 
         return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
 

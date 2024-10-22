@@ -37,9 +37,11 @@ class BaseClassifier:
         self.device = self.setup_device()
         
         if self.args.mask_use == 'yes':
-            self.args.mask_use == True
-        else:
-            self.args.mask_use == False
+            self.args.mask_use = True
+            print(f"Mask Use")
+        elif self.args.mask_use == 'no':
+            self.args.mask_use = False
+            print(f"Mask Not Use")
             
         self.wandb_use = self.check_wandb_use()
         self.best_accuracy = 0.0
@@ -239,25 +241,30 @@ class BaseClassifier:
                 self.optimizer.zero_grad()
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
-                if self.args.mask_use:
-                    inputs = inputs.to(self.device, non_blocking=True)[:, :2, :, :] # for image(2) + mask(1)
+                if self.args.mask_use == True:
+                    inputs = inputs[:, :2, :, :]
                     masks = masks.to(self.device, non_blocking=True)
-                    outputs = self.model(torch.concat([inputs, masks], dim=1)) # for image + mask 
+                    inputs = torch.concat([inputs, masks], dim=1)
                 else:
-                    outputs = self.model(inputs) # for image + mask 
-                
+                    pass  # inputs 그대로 사용
+
+                outputs = self.model(inputs)
+
                 if self.args.outlayer_num > 1:
-                    probs = torch.softmax(outputs, dim=1)
+                    # 다중 분류
                     _, predicted = torch.max(outputs.data, 1)
                     labels = labels.long()
                 else:
+                    # 이진 분류
+                    predicted = (outputs > 0).float()
+                    # 필요 시 확률 계산
                     probs = torch.sigmoid(outputs)
-                    predicted = (probs > 0.5).float()
 
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
                 total_loss += loss.item()
+
 
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -304,32 +311,36 @@ class BaseClassifier:
             for inputs, masks, labels in self.val_loader:
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
-                
-                if self.args.mask_use:
-                    inputs = inputs.to(self.device, non_blocking=True)[:, :2, :, :] # for image(2) + mask(1)
-                    masks = masks.to(self.device, non_blocking=True) # for image+mask
-                    outputs = self.model(torch.concat([inputs, masks], dim=1)) # for image + mask 
+                if self.args.mask_use == True:
+                    inputs = inputs[:, :2, :, :]
+                    masks = masks.to(self.device, non_blocking=True)
+                    inputs = torch.concat([inputs, masks], dim=1)
                 else:
-                    outputs = self.model(inputs) # for image 
-                
+                    pass  # inputs 그대로 사용
+
+                outputs = self.model(inputs)
+
                 if self.args.outlayer_num > 1:
-                    probs = torch.softmax(outputs, dim=1)
+                    # 다중 분류
                     _, predicted = torch.max(outputs.data, 1)
                     labels = labels.long()
                 else:
+                    # 이진 분류
+                    predicted = (outputs > 0).float()
+                    # 필요 시 확률 계산
                     probs = torch.sigmoid(outputs)
-                    predicted = (probs > 0.5).float()
 
                 loss = self.criterion(outputs, labels)
-
                 total_loss += loss.item()
 
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-
+                # 평가 지표 계산을 위해 레이블과 예측값 저장
                 all_labels.extend(labels.detach().cpu().numpy())
                 all_predictions.extend(predicted.detach().cpu().numpy())
-                all_probs.extend(probs.detach().cpu().numpy())
+                if self.args.outlayer_num > 1:
+                    all_probs.extend(torch.softmax(outputs, dim=1).detach().cpu().numpy())
+                else:
+                    all_probs.extend(torch.sigmoid(outputs).detach().cpu().numpy())
+
 
         avg_loss = total_loss / len(self.val_loader)
 
