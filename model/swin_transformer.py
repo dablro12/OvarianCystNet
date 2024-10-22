@@ -22,7 +22,7 @@ class binary_model(nn.Module):
     
 class multi_model(nn.Module):
     def __init__(self, type):
-        super(binary_model, self).__init__()
+        super(multi_model, self).__init__()
         if type =='t': # 256
             self.base_model = models.swin_v2_t(weights = models.Swin_V2_T_Weights.IMAGENET1K_V1)
         elif type == 's': # 224
@@ -30,7 +30,7 @@ class multi_model(nn.Module):
         elif type == 'default': # 256
             self.base_model = models.swin_v2_b(weights = models.Swin_V2_B_Weights.IMAGENET1K_V1)
         
-        self.base_model.head = nn.Linear(self.base_model.head.in_features, 1)
+        self.base_model.head = nn.Linear(self.base_model.head.in_features, 3)
 
     def forward(self, x):
         return self.base_model(x)

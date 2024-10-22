@@ -51,6 +51,7 @@ nohup /home/eiden/miniconda3/envs/cv/bin/python3 "$PYTHON_SCRIPT" \
     --data_dir "$DATA_DIR" \
     --csv_path "$CSV_PATH" \
     --version "$VER" \
+    --mask_use "$MASK_USE" \
     --fold_num "$FOLD_NUM" \
     --train_batch_size "$TRAIN_BATCH_SIZE" \
     --valid_batch_size "$VALID_BATCH_SIZE" \

@@ -19,7 +19,7 @@ from torchsampler import ImbalancedDatasetSampler
 import wandb
 
 from lib.seed import set_seed
-from lib.dataset import Custom_df_dataset, JointTransform, Custom_bus_dataset
+from lib.dataset import Custom_df_dataset, JointTransform, Custom_pcos_dataset
 from lib.datasets.sampler import class_weight_getter
 from model.loader import model_Loader
 from lib.metric.metrics import multi_classify_metrics, binary_classify_metrics
@@ -35,6 +35,12 @@ class BaseClassifier:
     def __init__(self, args: argparse.Namespace):
         self.args = args
         self.device = self.setup_device()
+        
+        if self.args.mask_use == 'yes':
+            self.args.mask_use == True
+        else:
+            self.args.mask_use == False
+            
         self.wandb_use = self.check_wandb_use()
         self.best_accuracy = 0.0
         self.save_every = math.ceil(self.args.epochs / 10)
@@ -82,22 +88,25 @@ class BaseClassifier:
         return train_augment_list, valid_augment_list
 
     def init_dataset(self, fold) -> Tuple[DataLoader, DataLoader]:
-        train_dataset = Custom_bus_dataset(
+        train_dataset = Custom_pcos_dataset(
             df=fold['train'],  # 수정: fold['train'] 사용
             root_dir=self.args.data_dir,
-            joint_transform=self.args.train_augment_list
-        )
-        val_dataset = Custom_bus_dataset(
+            joint_transform=self.args.train_augment_list,
+            mask_use = self.args.mask_use
+            )
+        
+        val_dataset = Custom_pcos_dataset(
             df=fold['val'],
             root_dir=self.args.data_dir,
-            joint_transform=self.args.valid_augment_list
-        )
+            joint_transform=self.args.valid_augment_list,
+            mask_use = self.args.mask_use
+            )
 
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.args.train_batch_size,
             sampler=ImbalancedDatasetSampler(train_dataset),
-            num_workers=8,
+            num_workers=12,
             pin_memory=True if self.device.type == 'cuda' else False,
             drop_last=True
         )
@@ -228,14 +237,17 @@ class BaseClassifier:
             
             for inputs, masks, labels in self.train_loader:
                 self.optimizer.zero_grad()
-                # inputs = inputs.to(self.device, non_blocking=True)
-                inputs = inputs.to(self.device, non_blocking=True)[:, :2, :, :] # for image(2) + mask(1)
-                masks = masks.to(self.device, non_blocking=True)
+                inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
-                # outputs = self.model(inputs) # for image + mask 
-                outputs = self.model(torch.concat([inputs, masks], dim=1)) # for image + mask 
+                if self.args.mask_use:
+                    inputs = inputs.to(self.device, non_blocking=True)[:, :2, :, :] # for image(2) + mask(1)
+                    masks = masks.to(self.device, non_blocking=True)
+                    outputs = self.model(torch.concat([inputs, masks], dim=1)) # for image + mask 
+                else:
+                    outputs = self.model(inputs) # for image + mask 
                 
                 if self.args.outlayer_num > 1:
+                    probs = torch.softmax(outputs, dim=1)
                     _, predicted = torch.max(outputs.data, 1)
                     labels = labels.long()
                 else:
@@ -290,13 +302,15 @@ class BaseClassifier:
 
         with torch.no_grad():
             for inputs, masks, labels in self.val_loader:
-                # inputs = inputs.to(self.device, non_blocking=True)
-                inputs = inputs.to(self.device, non_blocking=True)[:, :2, :, :] # for image(2) + mask(1)
+                inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
-                masks = masks.to(self.device, non_blocking=True) # for image+mask
-
-                # outputs = self.model(inputs) # for image 
-                outputs = self.model(torch.concat([inputs, masks], dim=1)) # for image + mask 
+                
+                if self.args.mask_use:
+                    inputs = inputs.to(self.device, non_blocking=True)[:, :2, :, :] # for image(2) + mask(1)
+                    masks = masks.to(self.device, non_blocking=True) # for image+mask
+                    outputs = self.model(torch.concat([inputs, masks], dim=1)) # for image + mask 
+                else:
+                    outputs = self.model(inputs) # for image 
                 
                 if self.args.outlayer_num > 1:
                     probs = torch.softmax(outputs, dim=1)
@@ -372,6 +386,7 @@ def main():
     parser.add_argument('--data_dir', type=str, required=True, help='Data directory path')
     parser.add_argument('--csv_path', type=str, required=True, help='CSV file path')
     parser.add_argument('--version', type=str, required=True, help='Model version')
+    parser.add_argument('--mask_use', type=str, required=True, help='Mask Using')
 
     # Model Parameter 
     parser.add_argument('--fold_num', type=int, default=5, help='Number of folds for k-fold cross validation')

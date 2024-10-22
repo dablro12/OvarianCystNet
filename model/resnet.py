@@ -42,6 +42,7 @@ class multi_model(nn.Module):
             self.base_model.fc = nn.Linear(512, num_classes)
         elif type == 'resnet34': # 256
             self.base_model = models.resnet34(weights = models.ResNet34_Weights)
+            self.base_model.fc = nn.Linear(512, num_classes)
         elif type == 'resnet50': # 232
             self.base_model = models.resnet50(weights = models.ResNet50_Weights)
         elif type == 'resnet101': # 224 

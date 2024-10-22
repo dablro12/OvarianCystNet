@@ -97,6 +97,50 @@ class Custom_bus_dataset(Dataset):
 
         return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
 
+class Custom_pcos_dataset(Dataset):
+    def __init__(self, df, root_dir, joint_transform = None, mask_use = False):
+        self.df = df
+        self.mask_use = mask_use
+        self.joint_transform = joint_transform  # Add joint transform for image and mask
+        self.image_paths = []
+        self.mask_paths = []
+        self.labels = []
+        
+        # Mapping for label encoding
+        
+        for idx, row in self.df.iterrows():
+            self.image_paths.append(os.path.join(root_dir, 'Dataset', f'{row["ID"]}.png')) # for original
+            
+            if self.mask_use:
+                self.mask_paths.append(os.path.join(root_dir, 'mask', f'{row["ID"]}.png')) #for med sam mask
+            self.labels.append(row['label'])  
+    
+    def get_labels(self):
+        return self.labels
+    
+    def __len__(self):
+        return len(self.df)
+    
+    def __getitem__(self, idx):
+        image_path = self.image_paths[idx]
+        label = self.labels[idx]
+        image = Image.open(image_path).convert('RGB')
+        
+        if self.mask_use:
+            mask_path = self.mask_paths[idx]
+            mask = Image.open(mask_path).convert('L')  # Keep mask as grayscale
+        else:
+            mask = Image.new('L', image.size)
+
+        
+        if self.joint_transform:
+            if self.mask_use:
+                image, mask = self.joint_transform(image, mask)
+            else:
+                image, mask = self.joint_transform(image, mask)  # Apply joint transform to image only
+                
+        return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
+
 class JointTransform:
     def __init__(self, resize=None, horizontal_flip=False, vertical_flip=False, rotation=False, interpolation=False, zoom = 0.1):
         self.resize = resize
