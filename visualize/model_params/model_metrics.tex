@@ -1,0 +1,35 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{siunitx}
+
+\begin{document}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Model Metrics Comparison}
+    \label{tab:model_metrics}
+    \begin{tabular}{l
+                    S[table-format=8.0]
+                    S[table-format=8.0]
+                    S[table-format=1.6]
+                    S[table-format=10.0]
+                    S[table-format=4.6]
+                    S[table-format=5.2]
+                    S[table-format=8.8]
+                    S[table-format=3.0]}
+        \toprule
+        \textbf{Model} & \textbf{Parameters} & \textbf{Trainable Parameters} & \textbf{Avg Inference Time (s)} & \textbf{FLOPs} & \textbf{Memory Usage (MB)} & \textbf{Model Size (MB)} & \textbf{Throughput (samples/sec)} & \textbf{Number of Layers} \\
+        \midrule
+        resnet & 21797672 & 21797672 & 0.002061 & 3678739456 & 193.131348 & 83.285940 & 485.233946 & 115 \\
+        mobilenet & 5483032 & 5483032 & 0.002987 & 234838456 & 334.689941 & 21.112841 & 334.770598 & 254 \\
+        efficient & 118515272 & 118515272 & 0.017106 & 12379301696 & 798.776367 & 454.599058 & 58.460580 & 1408 \\
+        convnext & 197767336 & 197767336 & 0.004529 & 34389508608 & 1458.105957 & 754.544054 & 220.787703 & 382 \\
+        swin-transformer & 87930848 & 87930848 & 0.014340 & 10270570496 & 1780.294434 & 336.377323 & 69.732734 & 431 \\
+        vision-transformer & 304326632 & 304326632 & 0.006285 & 39856041984 & 2929.968750 & 1161.027849 & 159.112615 & 295 \\
+        maxvit & 30919624 & 30919624 & 0.011988 & 5456315648 & 3176.244141 & 118.776381 & 83.415500 & 669 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\end{document}

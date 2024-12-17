@@ -9,6 +9,7 @@ import argparse
 from typing import Tuple, List, Any, Dict
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -19,7 +20,7 @@ from torchsampler import ImbalancedDatasetSampler
 import wandb
 
 from lib.seed import set_seed
-from lib.dataset import Custom_df_dataset, JointTransform, Custom_pcos_dataset
+from lib.dataset import Custom_df_dataset, JointTransform, Custom_pcos_dataset, get_class_weights
 from lib.datasets.sampler import class_weight_getter
 from model.loader import model_Loader
 from lib.metric.metrics import multi_classify_metrics, binary_classify_metrics
@@ -42,14 +43,14 @@ class BaseClassifier:
         elif self.args.mask_use == 'no':
             self.args.mask_use = False
             print(f"Mask Not Use")
-            
+
         self.wandb_use = self.check_wandb_use()
         self.best_accuracy = 0.0
+        self.best_model_path = None  # Best 모델 경로를 저장할 변수 추가
         self.save_every = math.ceil(self.args.epochs / 10)
         self.input_res = (3, 224, 224)
 
         # 조기 종료 파라미터
-        
         self.patience = 20
         self.best_val_loss = float('inf')
         self.early_stop_counter = 0
@@ -57,7 +58,6 @@ class BaseClassifier:
         print("=" * 100, "\033[41mStart Initialization\033[0m")
         self.fit()
         print("\033[41mFinished Initialization\033[0m")
-
 
     def check_wandb_use(self):
         if self.args.wandb_use == 'yes':
@@ -74,15 +74,19 @@ class BaseClassifier:
 
     def init_augmentation(self) -> Tuple[List[Any], List[Any]]:
         train_augment_list = JointTransform(
+            # resize=(256, 256),
             resize=(self.input_res[1], self.input_res[2]),
-            horizontal_flip=True,
-            vertical_flip=True,
-            rotation=0,
-            interpolation=False,
+            horizontal_flip=True, #데이터 증강수 : x 2
+            vertical_flip=True, # 데이터 증강수 : x 2
+            rotation=30, # 데이터 증강수 : x 8
+            interpolation=True,
+            # zoom = True,
+            center_crop= (self.input_res[1], self.input_res[2]), # 데이터 증강수 : x 1
+            random_brightness= True, #
         )
         valid_augment_list = JointTransform(
             resize=(self.input_res[1], self.input_res[2]),
-            horizontal_flip=False,
+            horizontal_flip=False,  
             vertical_flip=False,
             rotation=0,
             interpolation=False,
@@ -90,27 +94,35 @@ class BaseClassifier:
         return train_augment_list, valid_augment_list
 
     def init_dataset(self, fold) -> Tuple[DataLoader, DataLoader]:
+        if 'inpaint' in str(self.args.version): # self.args.version안에 "inpaint"라는 단어가 있으면 데이터셋 종류를 변경
+            data_type = 'Dataset_OCI'
+        else:
+            data_type = 'Dataset'
         train_dataset = Custom_pcos_dataset(
-            df=fold['train'],  # 수정: fold['train'] 사용
+            df=fold['train'],
             root_dir=self.args.data_dir,
             joint_transform=self.args.train_augment_list,
-            mask_use = self.args.mask_use
-            )
+            mask_use = self.args.mask_use,
+            class_num = self.args.outlayer_num,
+            data_type = data_type
+        )
         
         val_dataset = Custom_pcos_dataset(
             df=fold['val'],
             root_dir=self.args.data_dir,
             joint_transform=self.args.valid_augment_list,
-            mask_use = self.args.mask_use
-            )
+            mask_use = self.args.mask_use,
+            class_num = self.args.outlayer_num,
+            data_type = data_type
+        )
 
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.args.train_batch_size,
             sampler=ImbalancedDatasetSampler(train_dataset),
-            num_workers=12,
+            num_workers=8,
             pin_memory=True if self.device.type == 'cuda' else False,
-            drop_last=True
+            # drop_last=False  # 변경: drop_last=False
         )
         val_loader = DataLoader(
             val_dataset,
@@ -118,22 +130,24 @@ class BaseClassifier:
             shuffle=False,
             num_workers=4,
             pin_memory=True if self.device.type == 'cuda' else False,
-            drop_last=True
+            # drop_last=False  # 변경: drop_last=False
         )
 
         return train_loader, val_loader
-
+    
     def init_model(self, model_name: str, learning_rate: float, outlayer_num: int, fold) -> Tuple[nn.Module, optim.Optimizer, nn.Module, optim.lr_scheduler._LRScheduler]:
         model = model_Loader(model_name=model_name, outlayer_num=outlayer_num, type=self.args.type)
-        model.to(self.device)
+        model.to(self.device)  # 모델을 디바이스로 이동
 
-        optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+        optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate, weight_decay=1e-4) # 파라미터 프리즈 후 옵티마이저 설정
 
         if outlayer_num > 1:
-            criterion = nn.CrossEntropyLoss()
+            class_weights = get_class_weights(fold['train']['label'].values, outlayer_num, device = self.device)
+            criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
         elif outlayer_num == 1:
-            # pos_weight = class_weight_getter(fold)
-            criterion = nn.BCEWithLogitsLoss()
+            # 이진 분류의 경우 pos_weight 계산
+            pos_weight = class_weight_getter(fold)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
         else:
             raise ValueError("outlayer_num must be greater than 0.")
 
@@ -186,8 +200,9 @@ class BaseClassifier:
             self.best_val_loss = float('inf')
             self.early_stop_counter = 0
 
-            self.run_name = f"{self.args.backbone_model}_{self.args.type}_fold_{idx + 1}-{self.args.version}"
-            self.args.fold_num = idx + 1
+            current_fold = idx + 1  # 현재 폴드 번호
+            self.run_name = f"{self.args.backbone_model}_{self.args.type}_fold_{current_fold}-{self.args.version}"
+            # self.args.fold_num = idx + 1  # 제거: fold_num은 전체 폴드 수로 유지
 
             # 데이터 로더 초기화
             self.train_loader, self.val_loader = self.init_dataset(fold=fold)
@@ -199,7 +214,8 @@ class BaseClassifier:
                 outlayer_num=self.args.outlayer_num,
                 fold=fold
             )
-            self.model, self.criterion = self.model.to(self.device), self.criterion.to(self.device)
+            # self.model.to(self.device)  # 제거: 이미 init_model에서 이동
+            # self.criterion.to(self.device)  # 제거: 손실 함수는 디바이스로 이동할 필요 없음
 
             # 모델 파라미터 및 FLOPs 계산
             self.calculate_model_params(self.model)
@@ -209,8 +225,8 @@ class BaseClassifier:
                 self.wandb_init()
 
             # Train
-            print(f"\033[41mStart Training - Fold {idx + 1} \033[0m")
-            val_accuracy, val_loss = self.train_epoch()
+            print(f"\033[41mStart Training - Fold {current_fold} \033[0m")
+            val_accuracy, val_loss = self.train_epoch(current_fold)  # current_fold 전달
             fold_scores.append(val_accuracy)
 
             # WandB 세션 종료
@@ -227,7 +243,7 @@ class BaseClassifier:
         avg_score = np.mean(fold_scores)
         print(f"\n\033[42mAverage Validation Accuracy across all folds: {avg_score:.2f}%\033[0m")
 
-    def train_epoch(self) -> Tuple[float, float]:
+    def train_epoch(self, current_fold: int) -> Tuple[float, float]:
         final_val_accuracy = 0.0
         final_val_loss = float('inf')
 
@@ -241,12 +257,10 @@ class BaseClassifier:
                 self.optimizer.zero_grad()
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
-                if self.args.mask_use == True:
+                if self.args.mask_use:
                     inputs = inputs[:, :2, :, :]
                     masks = masks.to(self.device, non_blocking=True)
-                    inputs = torch.concat([inputs, masks], dim=1)
-                else:
-                    pass  # inputs 그대로 사용
+                    inputs = torch.cat([inputs, masks], dim=1)  # torch.concat -> torch.cat로 변경
 
                 outputs = self.model(inputs)
 
@@ -256,15 +270,13 @@ class BaseClassifier:
                     labels = labels.long()
                 else:
                     # 이진 분류
-                    predicted = (outputs > 0).float()
-                    # 필요 시 확률 계산
                     probs = torch.sigmoid(outputs)
-
+                    predicted = (probs > 0.5).float()
+                    
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
                 total_loss += loss.item()
-
 
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
@@ -274,7 +286,7 @@ class BaseClassifier:
             print(f"Epoch [{epoch}/{self.args.epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
 
             # Validation
-            print(f"\033[41mStart Validation - Fold {self.args.fold_num} \033[0m")
+            print(f"\033[41mStart Validation - Fold {current_fold} \033[0m")
             val_accuracy, val_loss = self.validate(epoch=epoch)
             final_val_accuracy = val_accuracy
             final_val_loss = val_loss
@@ -287,21 +299,20 @@ class BaseClassifier:
                 self.best_val_loss = val_loss
                 self.early_stop_counter = 0
                 # 최적 모델 저장
-                self.save_best_model(epoch, val_loss)
+                self.save_best_model(epoch, val_loss, current_fold)
             else:
                 self.early_stop_counter += 1
 
             if self.early_stop_counter >= self.patience:
                 print("Early stopping triggered")
+                self.save_best_model(epoch, val_loss, current_fold)
                 break
 
-        return final_val_accuracy, final_val_loss  # 반환값 추가
+        return final_val_accuracy, final_val_loss  # 반환값 유지
 
     def validate(self, epoch: int) -> Tuple[float, float]:
         self.model.eval()
         total_loss = 0.0
-        correct = 0
-        total = 0
 
         all_labels = []
         all_predictions = []
@@ -311,24 +322,23 @@ class BaseClassifier:
             for inputs, masks, labels in self.val_loader:
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
-                if self.args.mask_use == True:
+                if self.args.mask_use:
                     inputs = inputs[:, :2, :, :]
                     masks = masks.to(self.device, non_blocking=True)
-                    inputs = torch.concat([inputs, masks], dim=1)
-                else:
-                    pass  # inputs 그대로 사용
+                    inputs = torch.cat([inputs, masks], dim=1)
 
                 outputs = self.model(inputs)
 
                 if self.args.outlayer_num > 1:
                     # 다중 분류
+                    probs = torch.softmax(outputs, dim=1)
                     _, predicted = torch.max(outputs.data, 1)
                     labels = labels.long()
                 else:
                     # 이진 분류
-                    predicted = (outputs > 0).float()
-                    # 필요 시 확률 계산
                     probs = torch.sigmoid(outputs)
+                    predicted = (probs > 0.5).float()
+                    # 필요 시 확률 계산
 
                 loss = self.criterion(outputs, labels)
                 total_loss += loss.item()
@@ -336,12 +346,8 @@ class BaseClassifier:
                 # 평가 지표 계산을 위해 레이블과 예측값 저장
                 all_labels.extend(labels.detach().cpu().numpy())
                 all_predictions.extend(predicted.detach().cpu().numpy())
-                if self.args.outlayer_num > 1:
-                    all_probs.extend(torch.softmax(outputs, dim=1).detach().cpu().numpy())
-                else:
-                    all_probs.extend(torch.sigmoid(outputs).detach().cpu().numpy())
-
-
+                all_probs.extend(probs.detach().cpu().numpy())
+                    
         avg_loss = total_loss / len(self.val_loader)
 
         if self.args.outlayer_num > 1:
@@ -355,7 +361,8 @@ class BaseClassifier:
             metrics = binary_classify_metrics(
                 y_true=all_labels,
                 y_pred=all_predictions,
-                y_prob=np.array(all_probs)
+                y_prob=np.array(all_probs),
+                test_on = False
             )
 
         metrics['val_loss'] = avg_loss
@@ -367,16 +374,24 @@ class BaseClassifier:
         print(f"Validation Loss: {avg_loss:.4f}, Recall: {metrics.get('Sensitivity', 0):.2f}%, Acc: {metrics.get('Accuracy', 0):.2f}%")
         return metrics.get('Accuracy', 0), avg_loss
 
-    def save_best_model(self, epoch: int, val_loss: float):
+    def save_best_model(self, epoch: int, val_loss: float, current_fold: int):
+        # 이전 best 모델이 존재한다면 삭제
+        if self.best_model_path is not None and os.path.exists(self.best_model_path):
+            os.remove(self.best_model_path)
+
         save_dir = os.path.join(self.args.save_dir, self.run_name)
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"best_model_fold_{self.args.fold_num}_epoch_{epoch}.pth")
+        save_path = os.path.join(save_dir, f"best_model_fold_{current_fold}_epoch_{epoch}.pth")
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'loss': val_loss,
         }, save_path)
         print(f"Best model saved to {save_path}")
+
+        # 현재 best 모델 경로 갱신
+        self.best_model_path = save_path
+
 
 class MultiClassifier(BaseClassifier):
     pass  # 추가적인 다중 클래스 전용 기능이 필요하다면 여기에 구현
@@ -420,3 +435,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

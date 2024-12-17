@@ -1,0 +1,26 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{caption}
+\begin{document}
+\centering
+\begin{table}
+\caption{Augment mobilenet Performance per Fold}
+\label{tab:Augment_mobilenet_performance_per_fold}
+\begin{tabular}{lrrrrrl}
+\toprule
+ & Fold 1 & Fold 2 & Fold 3 & Fold 4 & Fold 5 & Average with std \\
+Metric &  &  &  &  &  &  \\
+\midrule
+AUC & 76.0227 & 76.6320 & 76.4600 & 76.6441 & 76.0757 & 76.37 ± 0.30 \\
+Accuracy & 68.6335 & 69.4099 & 70.1863 & 70.1863 & 69.4099 & 69.57 ± 0.65 \\
+F1-score & 67.9193 & 67.3961 & 68.6064 & 69.0516 & 67.7539 & 68.15 ± 0.67 \\
+Precision & 67.4933 & 66.5488 & 67.7776 & 68.3597 & 67.2800 & 67.49 ± 0.67 \\
+Sensitivity & 68.6335 & 69.4099 & 70.1863 & 70.1863 & 69.4099 & 69.57 ± 0.65 \\
+Specificity & 78.7059 & 76.5545 & 78.3437 & 78.3024 & 77.5292 & 77.89 ± 0.86 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+        

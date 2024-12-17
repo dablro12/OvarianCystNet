@@ -1,0 +1,26 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{caption}
+\begin{document}
+\centering
+\begin{table}
+\caption{Medsam1 maxvit Performance per Fold}
+\label{tab:Medsam1_maxvit_performance_per_fold}
+\begin{tabular}{lrrrrrl}
+\toprule
+ & Fold 1 & Fold 2 & Fold 3 & Fold 4 & Fold 5 & Average with std \\
+Metric &  &  &  &  &  &  \\
+\midrule
+AUC & 74.4441 & 73.8561 & 76.7231 & 76.7759 & 76.6621 & 75.69 ± 1.42 \\
+Accuracy & 65.0621 & 62.7329 & 67.8571 & 68.7888 & 67.3913 & 66.37 ± 2.45 \\
+F1-score & 65.8103 & 63.1695 & 68.3459 & 68.6842 & 67.8080 & 66.76 ± 2.30 \\
+Precision & 66.8129 & 64.3274 & 69.0544 & 68.7293 & 68.7104 & 67.53 ± 2.00 \\
+Sensitivity & 65.0621 & 62.7329 & 67.8571 & 68.7888 & 67.3913 & 66.37 ± 2.45 \\
+Specificity & 78.2917 & 77.1180 & 80.1249 & 79.8179 & 80.0303 & 79.08 ± 1.32 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+        

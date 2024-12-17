@@ -1,0 +1,26 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{caption}
+\begin{document}
+\centering
+\begin{table}
+\caption{Medsam1 vision-transformer Performance per Fold}
+\label{tab:Medsam1_vision-transformer_performance_per_fold}
+\begin{tabular}{lrrrrrl}
+\toprule
+ & Fold 1 & Fold 2 & Fold 3 & Fold 4 & Fold 5 & Average with std \\
+Metric &  &  &  &  &  &  \\
+\midrule
+AUC & 73.6226 & 74.3155 & 74.6189 & 75.6607 & 74.0761 & 74.46 ± 0.76 \\
+Accuracy & 68.7888 & 68.6335 & 69.2547 & 70.3416 & 72.2050 & 69.84 ± 1.48 \\
+F1-score & 67.9814 & 66.3370 & 68.2928 & 68.5689 & 67.1888 & 67.67 ± 0.91 \\
+Precision & 67.3669 & 65.6191 & 67.7949 & 67.7128 & 68.3216 & 67.36 ± 1.03 \\
+Sensitivity & 68.7888 & 68.6335 & 69.2547 & 70.3416 & 72.2050 & 69.84 ± 1.48 \\
+Specificity & 78.5347 & 77.5253 & 78.2845 & 77.7265 & 75.2461 & 77.46 ± 1.30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+        

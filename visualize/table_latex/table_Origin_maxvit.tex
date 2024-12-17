@@ -1,0 +1,26 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{caption}
+\begin{document}
+\centering
+\begin{table}
+\caption{Origin maxvit Performance per Fold}
+\label{tab:Origin_maxvit_performance_per_fold}
+\begin{tabular}{lrrrrrl}
+\toprule
+ & Fold 1 & Fold 2 & Fold 3 & Fold 4 & Fold 5 & Average with std \\
+Metric &  &  &  &  &  &  \\
+\midrule
+AUC & 75.8445 & 75.8556 & 76.2952 & 78.3441 & 77.5469 & 76.78 ± 1.12 \\
+Accuracy & 64.7516 & 64.9068 & 65.5280 & 67.3913 & 67.0807 & 65.93 ± 1.23 \\
+F1-score & 65.5834 & 65.3813 & 66.5983 & 67.9352 & 67.3708 & 66.57 ± 1.11 \\
+Precision & 67.0147 & 67.0616 & 68.4181 & 68.7327 & 67.8980 & 67.83 ± 0.78 \\
+Sensitivity & 64.7516 & 64.9068 & 65.5280 & 67.3913 & 67.0807 & 65.93 ± 1.23 \\
+Specificity & 78.6955 & 79.2486 & 79.6179 & 79.9143 & 79.4794 & 79.39 ± 0.46 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+        

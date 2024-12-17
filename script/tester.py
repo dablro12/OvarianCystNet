@@ -44,6 +44,8 @@ def bestmodel_selector(checkpoint_root_dir:str, model_cards:list, idx:int, devic
     
     checkpoint_model = model_Loader(model_name, outlayer_num = 1, type = model_type).to(device)
     model_weights = torch.load(checkpoint_path)['model_state_dict']
+    print(f"#################################")
+    print(f"Model Loading")
     checkpoint_model.load_state_dict(model_weights) 
     print(f"Checkpont Install Complete!! checkpoint_model: {model_name} fold : {fold_num} version: {version}")
     return checkpoint_model, model_name, version, fold_num
@@ -96,7 +98,6 @@ def test_inference(model, test_loader, version, device):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
     # def main():
     set_seed(42)
     test_csv_path = '/mnt/hdd/octc/BACKUP/BreastUS/experiment/test_df.csv'

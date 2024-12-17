@@ -26,14 +26,8 @@ def multi_classify_metrics(y_true, y_pred, y_prob, average='weighted'):
     # F1-score
     f1 = f1_score(y_true, y_pred, average=average, zero_division=0)
     
-    # AUC 계산 (One-vs-Rest 방식)
-    lb = LabelBinarizer()
-    lb.fit(y_true)
-    y_true_binarized = lb.transform(y_true)
-    if y_true_binarized.shape[1] == 1:
-        # 이진 분류의 경우
-        y_true_binarized = np.hstack((1 - y_true_binarized, y_true_binarized))
-    auc = roc_auc_score(y_true_binarized, y_prob, average=average, multi_class='ovr')
+    # AUC 계산
+    auc = roc_auc_score(LabelBinarizer().fit_transform(y_true), y_prob, average=average)
     
     # Specificity 계산 (각 클래스별 평균)
     cm = confusion_matrix(y_true, y_pred)
@@ -56,6 +50,7 @@ def multi_classify_metrics(y_true, y_pred, y_prob, average='weighted'):
         'F1-score': f1 * 100,
         'AUC': auc * 100
     }
+    print("Computing Metrics Complete!!")
     return metrics
 
 import numpy as np
@@ -64,7 +59,7 @@ from sklearn.metrics import (
     f1_score, roc_auc_score, confusion_matrix
 )
 
-def binary_classify_metrics(y_true, y_pred, y_prob, test_on='False'):
+def binary_classify_metrics(y_true, y_pred, y_prob, test_on=False):
     """
     바이너리 분류 평가 지표를 계산합니다.
 
@@ -114,7 +109,7 @@ def binary_classify_metrics(y_true, y_pred, y_prob, test_on='False'):
     }
     
     # 필요 시에만 ROC 곡선 관련 정보 추가
-    if test_on != 'False':
+    if test_on:
         fpr, tpr, thresholds = roc_curve(y_true, y_prob)
         metrics.update({
             'FPR': fpr.tolist(),

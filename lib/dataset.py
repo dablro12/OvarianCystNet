@@ -5,7 +5,7 @@ import numpy as np
 import torch 
 import random
 from torchvision import transforms
-
+import albumentations as A
 
 class Custom_stratified_Dataset(Dataset):
     def __init__(self, df, root_dir, transform = None): #transform 가지고올거있으면 가지고 오기 
@@ -98,7 +98,7 @@ class Custom_bus_dataset(Dataset):
         return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
 
 class Custom_pcos_dataset(Dataset):
-    def __init__(self, df, root_dir, joint_transform = None, mask_use = False):
+    def __init__(self, df, root_dir, joint_transform = None, mask_use = False, class_num = 1, data_type ="Dataset"):
         self.df = df
         self.mask_use = mask_use
         self.joint_transform = joint_transform  # Add joint transform for image and mask
@@ -109,14 +109,28 @@ class Custom_pcos_dataset(Dataset):
         # Mapping for label encoding
         
         for idx, row in self.df.iterrows():
-            self.image_paths.append(os.path.join(root_dir, 'Dataset', f'{row["ID"]}.png')) # for original
+            self.image_paths.append(os.path.join(root_dir, data_type, f'{row["ID"]}.png')) # for original
             
             if self.mask_use:
                 self.mask_paths.append(os.path.join(root_dir, 'mask', f'{row["ID"]}.png')) #for med sam mask
-            self.labels.append(row['label'])  
+            
+            if class_num == 1:
+                # label이 1~2이면 1로 0이면 0으로
+                if row['label'] == 0:
+                    self.labels.append(0)
+                else:
+                    self.labels.append(1)
+            else:
+                self.labels.append(row['label'])  
     
     def get_labels(self):
         return self.labels
+    
+    def get_image_paths(self):
+        return self.image_paths
+    
+    def get_mask_paths(self):
+        return self.mask_paths
     
     def __len__(self):
         return len(self.df)
@@ -137,17 +151,33 @@ class Custom_pcos_dataset(Dataset):
             image, mask = self.joint_transform(image, mask)
                 
         return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
+        # return image, mask, torch.tensor(label), self.mask_paths  # Convert label to tensor for model compatibility
 
 class JointTransform:
-    def __init__(self, resize=None, horizontal_flip=False, vertical_flip=False, rotation=False, interpolation=False, zoom = 0.1):
+    def __init__(
+        self,
+        resize=None,
+        horizontal_flip=False,
+        vertical_flip=False,
+        rotation=False,
+        interpolation=False,
+        zoom = 0.1,
+        center_crop = None,
+        random_brightness = False,
+        ):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
         self.vertical_flip = vertical_flip
         self.rotation = rotation
         self.interpolation = interpolation
+        self.zoom = zoom
+        self.center_crop = center_crop
+        self.random_brightness = random_brightness
+        
         self.zoom = zoom 
         
     def __call__(self, image, mask):
+        ## Geoemtric transformation
         # Resize
         if self.resize:
             resize_transform = transforms.Resize(self.resize)
@@ -169,16 +199,27 @@ class JointTransform:
             angle = random.randint(-self.rotation, self.rotation)
             image = transforms.functional.rotate(image, angle)
             mask = transforms.functional.rotate(mask, angle)
+
+        # Center crop
+        if self.center_crop is not None:
+            image = transforms.CenterCrop(self.center_crop)(image)
+            mask = transforms.CenterCrop(self.center_crop)(mask)
         
+        ## Color transformation
+        # Random brightness
+        if self.random_brightness:
+            image = A.RandomBrightnessContrast(p=0.5)(image = np.array(image))['image'] # albumentation은 np.array로 받아야함
+            image = Image.fromarray(image)
+
         if self.interpolation:
             image = transforms.functional.resize(image, self.resize, interpolation=self.interpolation)
             mask = transforms.functional.resize(mask, self.resize, interpolation=self.interpolation)
-        
-        # image는 2channel로 적용
-        
+                
         # To Tensor
         image = transforms.ToTensor()(image)
         mask = transforms.ToTensor()(mask)
+        
+        image = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(image)
         
         return image, mask
 
@@ -255,3 +296,10 @@ class BalancedBatchSampler(BatchSampler):
 
     def __len__(self):
         return min(len(self.class0_indices), len(self.class1_indices)) // (self.batch_size // 2)
+    
+#%% Imbalnaned Dataset
+from sklearn.utils.class_weight import compute_class_weight
+
+def get_class_weights(labels, num_classes, device):
+    class_weights = compute_class_weight(class_weight='balanced', classes=np.arange(num_classes), y=labels)
+    return torch.tensor(class_weights, dtype=torch.float).to(device)

@@ -367,6 +367,8 @@ class BaseClassifier:
 
     def load_model(self, save_path: str) -> Dict[str, Any]:
         checkpoint = torch.load(save_path, map_location=self.device)
+        print(f"#################################")
+        print(f"Model Loading")
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         epoch = checkpoint['epoch']

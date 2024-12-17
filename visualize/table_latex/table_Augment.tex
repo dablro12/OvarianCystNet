@@ -1,0 +1,24 @@
+
+    \documentclass{standalone}
+    \usepackage{booktabs}
+    \begin{document}
+    \begin{table}
+\caption{Augment Version Performance}
+\label{tab:Augment_performance}
+\begin{tabular}{lrrrrrr}
+\toprule
+Model & Accuracy & Precision & Sensitivity & Specificity & F1-score & AUC \\
+\midrule
+convnext & 74.1304 & 71.7179 & 74.1304 & 79.6919 & 71.6844 & 80.0667 \\
+efficient & 71.6770 & 68.9323 & 71.6770 & 78.3045 & 69.5176 & 77.0850 \\
+maxvit & 71.1491 & 68.7110 & 71.1491 & 79.2706 & 69.4431 & 78.6532 \\
+mobilenet & 69.5652 & 67.4919 & 69.5652 & 77.8872 & 68.1454 & 76.3669 \\
+resnet & 72.3913 & 69.7684 & 72.3913 & 78.2475 & 70.0726 & 76.9388 \\
+swin-transformer & 72.5776 & 70.4686 & 72.5776 & 79.3762 & 70.9379 & 78.2084 \\
+vision-transformer & 64.4410 & 61.8494 & 64.4410 & 74.6291 & 62.6506 & 69.3495 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+    \end{document}
+    

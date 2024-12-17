@@ -3,13 +3,15 @@ import importlib
 
 MODEL_LIST = [
     "alexnet", "convnext", "dynamic-vit", "inception", "mobilenet", "resnet", "vgg",
-    "densenet", "efficient", "ocys-net", "swin-transformer", "yolo", "vision-transformer", 'maxvit'
+    "densenet", "efficient", "ocys-net", "swin-transformer", "yolo", "vision-transformer", 'maxvit',
+    "medsam1"
 ]
 
 def model_Loader(model_name: str, outlayer_num: int, type: str):
     """ 
     Model Loader : 정해진 모델 가지고 오는 로더
     만약 model이 없으면 에러 발생시키고, 있으면 모델명과 같은 파이썬 파일에서 모델 가지고 오기 
+    type : 모델의 타입 (예: 'binary', 'multi')
     """
     if model_name in MODEL_LIST:
         try:

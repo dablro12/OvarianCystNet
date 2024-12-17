@@ -1,0 +1,26 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{caption}
+\begin{document}
+\centering
+\begin{table}
+\caption{Augment convnext Performance per Fold}
+\label{tab:Augment_convnext_performance_per_fold}
+\begin{tabular}{lrrrrrl}
+\toprule
+ & Fold 1 & Fold 2 & Fold 3 & Fold 4 & Fold 5 & Average with std \\
+Metric &  &  &  &  &  &  \\
+\midrule
+AUC & 80.3386 & 79.4701 & 79.9206 & 79.8138 & 80.7903 & 80.07 ± 0.51 \\
+Accuracy & 71.8944 & 73.6025 & 75.9317 & 74.6894 & 74.5342 & 74.13 ± 1.50 \\
+F1-score & 70.4245 & 70.6749 & 72.9362 & 72.3237 & 72.0626 & 71.68 ± 1.09 \\
+Precision & 69.6828 & 70.4414 & 73.6123 & 72.8417 & 72.0112 & 71.72 ± 1.64 \\
+Sensitivity & 71.8944 & 73.6025 & 75.9317 & 74.6894 & 74.5342 & 74.13 ± 1.50 \\
+Specificity & 80.1147 & 78.9942 & 79.9605 & 79.8738 & 79.5164 & 79.69 ± 0.45 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+        

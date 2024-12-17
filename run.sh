@@ -4,7 +4,7 @@
 set -e
 
 # Path to the .env file
-ENV_FILE=".env"
+ENV_FILE=".env_bk"
 
 # Check if .env file exists
 if [ -f "$ENV_FILE" ]; then

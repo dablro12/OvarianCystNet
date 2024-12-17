@@ -1,0 +1,26 @@
+
+\documentclass{standalone}
+\usepackage{booktabs}
+\usepackage{caption}
+\begin{document}
+\centering
+\begin{table}
+\caption{Augment maxvit Performance per Fold}
+\label{tab:Augment_maxvit_performance_per_fold}
+\begin{tabular}{lrrrrrl}
+\toprule
+ & Fold 1 & Fold 2 & Fold 3 & Fold 4 & Fold 5 & Average with std \\
+Metric &  &  &  &  &  &  \\
+\midrule
+AUC & 79.3030 & 77.4196 & 77.8444 & 78.3627 & 80.3364 & 78.65 ± 1.17 \\
+Accuracy & 72.2050 & 70.3416 & 72.3602 & 69.5652 & 71.2733 & 71.15 ± 1.20 \\
+F1-score & 69.9182 & 68.9001 & 69.8474 & 69.2197 & 69.3299 & 69.44 ± 0.43 \\
+Precision & 69.0358 & 68.1400 & 68.6456 & 69.1620 & 68.5714 & 68.71 ± 0.41 \\
+Sensitivity & 72.2050 & 70.3416 & 72.3602 & 69.5652 & 71.2733 & 71.15 ± 1.20 \\
+Specificity & 78.9828 & 79.2003 & 79.4879 & 80.1747 & 78.5071 & 79.27 ± 0.62 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+        
