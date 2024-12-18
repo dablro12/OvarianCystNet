@@ -105,9 +105,7 @@ class Custom_pcos_dataset(Dataset):
         self.image_paths = []
         self.mask_paths = []
         self.labels = []
-        
         # Mapping for label encoding
-        
         for idx, row in self.df.iterrows():
             self.image_paths.append(os.path.join(root_dir, data_type, f'{row["ID"]}.png')) # for original
             
@@ -161,7 +159,6 @@ class JointTransform:
         vertical_flip=False,
         rotation=False,
         interpolation=False,
-        zoom = 0.1,
         center_crop = None,
         random_brightness = False,
         ):
@@ -170,11 +167,9 @@ class JointTransform:
         self.vertical_flip = vertical_flip
         self.rotation = rotation
         self.interpolation = interpolation
-        self.zoom = zoom
         self.center_crop = center_crop
         self.random_brightness = random_brightness
         
-        self.zoom = zoom 
         
     def __call__(self, image, mask):
         ## Geoemtric transformation

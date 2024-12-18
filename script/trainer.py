@@ -73,16 +73,24 @@ class BaseClassifier:
         return device
 
     def init_augmentation(self) -> Tuple[List[Any], List[Any]]:
+        # For Augment
+        # train_augment_list = JointTransform(
+        #     resize=(256, 256),
+        #     resize=(self.input_res[1], self.input_res[2]),
+        #     horizontal_flip=True, #데이터 증강수 : x 2
+        #     vertical_flip=True, # 데이터 증강수 : x 2
+        #     rotation=30, # 데이터 증강수 : x 8
+        #     interpolation=True,
+        #     center_crop= (self.input_res[1], self.input_res[2]), # 데이터 증강수 : x 1
+        #     random_brightness= True, #
+        # )
+        #Form Original
         train_augment_list = JointTransform(
-            # resize=(256, 256),
             resize=(self.input_res[1], self.input_res[2]),
-            horizontal_flip=True, #데이터 증강수 : x 2
-            vertical_flip=True, # 데이터 증강수 : x 2
-            rotation=30, # 데이터 증강수 : x 8
-            interpolation=True,
-            # zoom = True,
-            center_crop= (self.input_res[1], self.input_res[2]), # 데이터 증강수 : x 1
-            random_brightness= True, #
+            horizontal_flip=False, #데이터 증강수 : x 2
+            vertical_flip=False, # 데이터 증강수 : x 2
+            rotation=0, # 데이터 증강수 : x 8
+            interpolation=False,
         )
         valid_augment_list = JointTransform(
             resize=(self.input_res[1], self.input_res[2]),
@@ -98,6 +106,7 @@ class BaseClassifier:
             data_type = 'Dataset_OCI'
         else:
             data_type = 'Dataset'
+        print(f"Data type: {data_type}")
         train_dataset = Custom_pcos_dataset(
             df=fold['train'],
             root_dir=self.args.data_dir,
@@ -199,10 +208,10 @@ class BaseClassifier:
             # 각 폴드마다 조기 종료 변수 초기화
             self.best_val_loss = float('inf')
             self.early_stop_counter = 0
+            self.best_model_path = None  # 폴드마다 초기화
 
             current_fold = idx + 1  # 현재 폴드 번호
             self.run_name = f"{self.args.backbone_model}_{self.args.type}_fold_{current_fold}-{self.args.version}"
-            # self.args.fold_num = idx + 1  # 제거: fold_num은 전체 폴드 수로 유지
 
             # 데이터 로더 초기화
             self.train_loader, self.val_loader = self.init_dataset(fold=fold)
@@ -214,8 +223,6 @@ class BaseClassifier:
                 outlayer_num=self.args.outlayer_num,
                 fold=fold
             )
-            # self.model.to(self.device)  # 제거: 이미 init_model에서 이동
-            # self.criterion.to(self.device)  # 제거: 손실 함수는 디바이스로 이동할 필요 없음
 
             # 모델 파라미터 및 FLOPs 계산
             self.calculate_model_params(self.model)
@@ -226,8 +233,16 @@ class BaseClassifier:
 
             # Train
             print(f"\033[41mStart Training - Fold {current_fold} \033[0m")
-            val_accuracy, val_loss = self.train_epoch(current_fold)  # current_fold 전달
+            val_accuracy, val_loss, best_epoch = self.train_epoch(current_fold)
             fold_scores.append(val_accuracy)
+
+            # 모델이 저장되지 않았다면 마지막 에포크의 모델 저장
+            if self.best_model_path is None and best_epoch != -1:
+                print("학습 중 개선이 감지되지 않았습니다. 마지막 에포크의 모델을 저장합니다.")
+                self.save_best_model(best_epoch, val_loss, current_fold)
+            elif self.best_model_path is None:
+                print("학습 중 어떤 모델도 저장되지 않았습니다. 현재 모델을 저장합니다.")
+                self.save_best_model(epoch=self.args.epochs, val_loss=val_loss, current_fold=current_fold)
 
             # WandB 세션 종료
             if self.wandb_use:
@@ -239,9 +254,9 @@ class BaseClassifier:
             # CUDA 캐시 비우기
             torch.cuda.empty_cache()
 
-        # 모든 fold의 평균 성능 출력
+        # 모든 폴드의 평균 성능 출력
         avg_score = np.mean(fold_scores)
-        print(f"\n\033[42mAverage Validation Accuracy across all folds: {avg_score:.2f}%\033[0m")
+        print(f"\n\033[42m모든 폴드의 평균 검증 정확도: {avg_score:.2f}%\033[0m")
 
     def train_epoch(self, current_fold: int) -> Tuple[float, float]:
         final_val_accuracy = 0.0
@@ -302,7 +317,7 @@ class BaseClassifier:
                 self.save_best_model(epoch, val_loss, current_fold)
             else:
                 self.early_stop_counter += 1
-
+            # 조기 종료 카운터가 patience보다 크거나 같으면 학습 종료
             if self.early_stop_counter >= self.patience:
                 print("Early stopping triggered")
                 self.save_best_model(epoch, val_loss, current_fold)
@@ -338,7 +353,6 @@ class BaseClassifier:
                     # 이진 분류
                     probs = torch.sigmoid(outputs)
                     predicted = (probs > 0.5).float()
-                    # 필요 시 확률 계산
 
                 loss = self.criterion(outputs, labels)
                 total_loss += loss.item()
@@ -347,8 +361,13 @@ class BaseClassifier:
                 all_labels.extend(labels.detach().cpu().numpy())
                 all_predictions.extend(predicted.detach().cpu().numpy())
                 all_probs.extend(probs.detach().cpu().numpy())
-                    
+
         avg_loss = total_loss / len(self.val_loader)
+
+        # 유효하지 않은 손실 값 처리
+        if not np.isfinite(avg_loss):
+            print(f"경고: 에포크 {epoch}에서 유효하지 않은 평균 손실이 감지되었습니다. 손실을 무한대로 설정합니다.")
+            avg_loss = float('inf')
 
         if self.args.outlayer_num > 1:
             metrics = multi_classify_metrics(
@@ -362,7 +381,7 @@ class BaseClassifier:
                 y_true=all_labels,
                 y_pred=all_predictions,
                 y_prob=np.array(all_probs),
-                test_on = False
+                test_on=False
             )
 
         metrics['val_loss'] = avg_loss
@@ -371,26 +390,34 @@ class BaseClassifier:
         if self.wandb_use:
             wandb.log(metrics, step=epoch)
 
-        print(f"Validation Loss: {avg_loss:.4f}, Recall: {metrics.get('Sensitivity', 0):.2f}%, Acc: {metrics.get('Accuracy', 0):.2f}%")
+        print(f"검증 손실: {avg_loss:.4f}, 재현율: {metrics.get('Sensitivity', 0):.2f}%, 정확도: {metrics.get('Accuracy', 0):.2f}%")
         return metrics.get('Accuracy', 0), avg_loss
 
+
     def save_best_model(self, epoch: int, val_loss: float, current_fold: int):
-        # 이전 best 모델이 존재한다면 삭제
-        if self.best_model_path is not None and os.path.exists(self.best_model_path):
-            os.remove(self.best_model_path)
+        try:
+            # 이전 best 모델이 존재한다면 삭제
+            if self.best_model_path and os.path.exists(self.best_model_path):
+                os.remove(self.best_model_path)
+                print(f"이전 최적 모델을 삭제했습니다: {self.best_model_path}")
 
-        save_dir = os.path.join(self.args.save_dir, self.run_name)
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, f"best_model_fold_{current_fold}_epoch_{epoch}.pth")
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': self.model.state_dict(),
-            'loss': val_loss,
-        }, save_path)
-        print(f"Best model saved to {save_path}")
+            # 저장 디렉토리 생성
+            save_dir = os.path.join(self.args.save_dir, self.run_name)
+            os.makedirs(save_dir, exist_ok=True)
+            save_path = os.path.join(save_dir, f"best_model_fold_{current_fold}_epoch_{epoch}.pth")
 
-        # 현재 best 모델 경로 갱신
-        self.best_model_path = save_path
+            # 모델 상태 저장
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': self.model.state_dict(),
+                'loss': val_loss,
+            }, save_path)
+            print(f"최적 모델이 다음 경로에 저장되었습니다: {save_path}")
+
+            # 현재 best 모델 경로 갱신
+            self.best_model_path = save_path
+        except Exception as e:
+            print(f"폴드 {current_fold}의 에포크 {epoch}에서 모델 저장 중 오류 발생: {e}")
 
 
 class MultiClassifier(BaseClassifier):

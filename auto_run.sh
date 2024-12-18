@@ -28,9 +28,8 @@ declare -a VERSIONS=("origin" "inpaint" "mask")
 # declare -a VERSIONS=("originwithaugment" "inpaintnwithaugment" "masknwithaugment")
 
 # 모델과 타입의 조합 정의
-declare -a MASK_USES=("no" "yes" "yes")
+declare -a MASK_USES=("no" "no" "yes")
 declare -a BACKBONE_MODELS=("resnet" "mobilenet" "efficient" "convnext" "swin-transformer" "vision-transformer" "maxvit")
-
 declare -A MODEL_TYPES
 MODEL_TYPES["resnet"]="resnet34"
 MODEL_TYPES["mobilenet"]="l"
@@ -79,7 +78,8 @@ for idx in "${!VERSIONS[@]}"; do
             --seed "$RANDOM_SEED" \
             --outlayer_num "$OUTLAYER_NUM" \
             > "$LOG_FILE" 2>&1 &
-        echo "모델: $BACKBONE_MODEL, 타입: $MODEL_TYPE, 버전: $VER, 마스크 사용: $MASK_USE 에 대한 훈련을 시작했습니다. 로그는 $LOG_FILE에 저장됩니다."
+        echo "모델: $BACKBONE_MODEL, 버전: $VER, 마스크 사용: $MASK_USE 에 대한 훈련을 시작합니다."
+        echo "로그는 $LOG_FILE에 저장됩니다."
 
         # 시스템 리소스를 고려하여 각 작업이 완료될 때까지 기다림
         wait
