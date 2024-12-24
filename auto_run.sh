@@ -24,12 +24,21 @@ LOG_DIR="log"
 mkdir -p "$LOG_DIR"
 
 # VER와 MASK_USE의 조합 정의
-declare -a VERSIONS=("origin" "inpaint" "mask")
-# declare -a VERSIONS=("originwithaugment" "inpaintnwithaugment" "masknwithaugment")
+# declare -a VERSIONS=("inpaint" "origin" "mask" "originwithaugment" "inpaintwithaugment" "maskwithaugment")
+# declare -a MASK_USES=("no" "no" "yes" "no" "no" "yes")
 
 # 모델과 타입의 조합 정의
-declare -a MASK_USES=("no" "no" "yes")
-declare -a BACKBONE_MODELS=("resnet" "mobilenet" "efficient" "convnext" "swin-transformer" "vision-transformer" "maxvit")
+# declare -a BACKBONE_MODELS=("resnet" "mobilenet" "efficient" "convnext" "swin-transformer" "vision-transformer" "maxvit")
+
+
+# declare -a VERSIONS=("originwithaugment", "inpaintwithaugment", "maskwithaugment")
+# declare -a MASK_USES=("no" "no" "yes")
+declare -a BACKBONE_MODELS=("vit-google")
+declare -a VERSIONS=("origin" "originwithaugment")
+declare -a MASK_USES=("no" "no")
+
+
+
 declare -A MODEL_TYPES
 MODEL_TYPES["resnet"]="resnet34"
 MODEL_TYPES["mobilenet"]="l"
@@ -38,6 +47,8 @@ MODEL_TYPES["convnext"]="l"
 MODEL_TYPES["swin-transformer"]="default"
 MODEL_TYPES["vision-transformer"]="l_16"
 MODEL_TYPES["maxvit"]="default"
+MODEL_TYPES["vit-google"]="default"
+
 # 필요한 경우 다른 모델과 타입 추가
 
 # VER와 MASK_USE의 조합을 순회
@@ -60,7 +71,7 @@ for idx in "${!VERSIONS[@]}"; do
         LOG_FILE="$LOG_DIR/${BACKBONE_MODEL}_${MODEL_TYPE}_${VER}.txt"
 
         # 훈련 스크립트 실행
-        nohup /home/eiden/miniconda3/envs/cv/bin/python3 "$PYTHON_SCRIPT" \
+        nohup /home/eiden/miniconda3/envs/medsam/bin/python3 "$PYTHON_SCRIPT" \
             --wandb_use "$WANDB_USE" \
             --wandb_project "$WANDB_PROJECT" \
             --data_dir "$DATA_DIR" \

@@ -25,6 +25,7 @@ from lib.datasets.sampler import class_weight_getter
 from model.loader import model_Loader
 from lib.metric.metrics import multi_classify_metrics, binary_classify_metrics
 from lib.ml.kfold import k_fold_split
+from lib.sampler import BalancedBatchSampler
 
 # 환경 변수 설정 및 백엔드 최적화
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -74,30 +75,25 @@ class BaseClassifier:
 
     def init_augmentation(self) -> Tuple[List[Any], List[Any]]:
         # For Augment
-        # train_augment_list = JointTransform(
-        #     resize=(256, 256),
-        #     resize=(self.input_res[1], self.input_res[2]),
-        #     horizontal_flip=True, #데이터 증강수 : x 2
-        #     vertical_flip=True, # 데이터 증강수 : x 2
-        #     rotation=30, # 데이터 증강수 : x 8
-        #     interpolation=True,
-        #     center_crop= (self.input_res[1], self.input_res[2]), # 데이터 증강수 : x 1
-        #     random_brightness= True, #
-        # )
-        #Form Original
-        train_augment_list = JointTransform(
-            resize=(self.input_res[1], self.input_res[2]),
-            horizontal_flip=False, #데이터 증강수 : x 2
-            vertical_flip=False, # 데이터 증강수 : x 2
-            rotation=0, # 데이터 증강수 : x 8
-            interpolation=False,
-        )
+        if self.args.version in ["originwithaugment", "inpaintnwithaugment", "masknwithaugment"]:
+            print(f"Augment Use : Yes")
+            train_augment_list = JointTransform(
+                resize=(284, 284),
+                center_crop= (self.input_res[1], self.input_res[2]),
+                horizontal_flip=True, #데이터 증강수 : x 2
+                vertical_flip=True, # 데이터 증강수 : x 2
+                random_affine = True,
+                rotation=30, # 데이터 증강수 : x 8
+                random_brightness= True, #
+            )
+        else:#Form Original
+            print(f"Augment Use : No")
+            train_augment_list = JointTransform(
+                resize=(self.input_res[1], self.input_res[2]),
+            )
+
         valid_augment_list = JointTransform(
             resize=(self.input_res[1], self.input_res[2]),
-            horizontal_flip=False,  
-            vertical_flip=False,
-            rotation=0,
-            interpolation=False,
         )
         return train_augment_list, valid_augment_list
 
@@ -128,8 +124,8 @@ class BaseClassifier:
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.args.train_batch_size,
-            sampler=ImbalancedDatasetSampler(train_dataset),
-            num_workers=8,
+            sampler=BalancedBatchSampler(train_dataset, labels = train_dataset.labels_tensor), # 변경: ImbalancedDatasetSampler -> BalancedBatchSampler
+            num_workers=16,
             pin_memory=True if self.device.type == 'cuda' else False,
             # drop_last=False  # 변경: drop_last=False
         )
@@ -137,7 +133,7 @@ class BaseClassifier:
             val_dataset,
             batch_size=self.args.valid_batch_size,
             shuffle=False,
-            num_workers=4,
+            num_workers=16,
             pin_memory=True if self.device.type == 'cuda' else False,
             # drop_last=False  # 변경: drop_last=False
         )
@@ -323,7 +319,7 @@ class BaseClassifier:
                 self.save_best_model(epoch, val_loss, current_fold)
                 break
 
-        return final_val_accuracy, final_val_loss  # 반환값 유지
+        return final_val_accuracy, final_val_loss, epoch   # 반환값 유지
 
     def validate(self, epoch: int) -> Tuple[float, float]:
         self.model.eval()

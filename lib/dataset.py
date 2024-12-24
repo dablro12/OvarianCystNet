@@ -98,124 +98,153 @@ class Custom_bus_dataset(Dataset):
         return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
 
 class Custom_pcos_dataset(Dataset):
-    def __init__(self, df, root_dir, joint_transform = None, mask_use = False, class_num = 1, data_type ="Dataset"):
+    def __init__(self, 
+            df, 
+            root_dir, 
+            joint_transform:None, 
+            mask_use:bool, 
+            class_num:int, 
+            data_type:str):
         self.df = df
+        self.root_dir = root_dir
         self.mask_use = mask_use
-        self.joint_transform = joint_transform  # Add joint transform for image and mask
+        self.joint_transform = joint_transform
         self.image_paths = []
         self.mask_paths = []
-        self.labels = []
-        # Mapping for label encoding
-        for idx, row in self.df.iterrows():
-            self.image_paths.append(os.path.join(root_dir, data_type, f'{row["ID"]}.png')) # for original
-            
+        
+        # 모든 라벨을 담아둘 임시 리스트
+        label_list = []
+
+        # 파일 경로 및 라벨 구성
+        for _, row in self.df.iterrows():
+            # (1) 이미지 경로 세팅
+            self.image_paths.append(
+                os.path.join(root_dir, data_type, f'{row["ID"]}.png')
+            )
+
+            # (2) 마스크 경로 세팅 (mask_use=True일 때)
             if self.mask_use:
-                self.mask_paths.append(os.path.join(root_dir, 'mask', f'{row["ID"]}.png')) #for med sam mask
+                self.mask_paths.append(
+                    os.path.join(root_dir, 'mask', f'{row["ID"]}.png')
+                )
             
+            # (3) 라벨 전처리 및 label_list에 저장
             if class_num == 1:
-                # label이 1~2이면 1로 0이면 0으로
+                # 예시: 원본 라벨이 0이면 0, 1~2이면 1로 이진화
                 if row['label'] == 0:
-                    self.labels.append(0)
+                    label_list.append(0)
                 else:
-                    self.labels.append(1)
+                    label_list.append(1)
             else:
-                self.labels.append(row['label'])  
-    
-    def get_labels(self):
-        return self.labels
-    
-    def get_image_paths(self):
-        return self.image_paths
-    
-    def get_mask_paths(self):
-        return self.mask_paths
-    
+                # 3개 클래스 그대로 사용한다고 가정
+                label_list.append(row['label'])
+        
+        # (4) label_list를 텐서로 변환해 보관
+        self.labels_tensor = torch.tensor(label_list, dtype=torch.long)
+
     def __len__(self):
         return len(self.df)
-    
+
     def __getitem__(self, idx):
+        """ __getitem__에서는 실제 (image, mask, label)을 만듭니다. """
         image_path = self.image_paths[idx]
-        label = self.labels[idx]
         image = Image.open(image_path).convert('RGB')
-        
+
+        # 마스크가 필요 없다면 빈 마스크를 리턴
         if self.mask_use:
             mask_path = self.mask_paths[idx]
-            mask = Image.open(mask_path).convert('L')  # Keep mask as grayscale
+            mask = Image.open(mask_path).convert('L')
         else:
-            mask = Image.new('L', image.size) # 껍데기 mask
+            mask = Image.new('L', image.size)
 
-        
+        # Joint transform이 있다면 (image, mask) 같이 augment
         if self.joint_transform:
             image, mask = self.joint_transform(image, mask)
-                
-        return image, mask, torch.tensor(label)  # Convert label to tensor for model compatibility
-        # return image, mask, torch.tensor(label), self.mask_paths  # Convert label to tensor for model compatibility
+
+        # 라벨 텐서에서 idx 위치의 값을 꺼냄
+        label = self.labels_tensor[idx]
+
+        return image, mask, label
 
 class JointTransform:
+    """
+    의료영상에서도 사용할 수 있도록 개선된 JointTransform 예시입니다.
+    - resize: (width, height)로 변경할 사이즈 (ex: (224, 224))
+    - horizontal_flip, vertical_flip: 각각 True일 경우 50% 확률로 가로/세로 뒤집기
+    - rotation: 정수 값. 예: 30 -> -30 ~ +30 범위 내 임의 회전
+    - random_affine: True일 경우 RandomAffine 적용
+        * random_affine_params로 degrees, shear, scale, translate 등 세부설정 가능
+    - center_crop: (width, height). CenterCrop 적용
+    - random_brightness: True일 경우 Albumentations RandomBrightnessContrast 적용
+        * brightness_params로 p값 등 추가 설정 가능
+    - normalize_mean, normalize_std: Normalize(mean, std)에 사용할 값
+    (기본값은 ImageNet 통계, 의료영상이면 직접 구한 mean/std로 바꾸는 것을 권장)
+    """
     def __init__(
         self,
         resize=None,
+        center_crop = None,
         horizontal_flip=False,
         vertical_flip=False,
         rotation=False,
-        interpolation=False,
-        center_crop = None,
         random_brightness = False,
+        random_affine = False,
         ):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
         self.vertical_flip = vertical_flip
         self.rotation = rotation
-        self.interpolation = interpolation
         self.center_crop = center_crop
         self.random_brightness = random_brightness
-        
+        self.random_affine = random_affine
         
     def __call__(self, image, mask):
-        ## Geoemtric transformation
-        # Resize
-        if self.resize:
+        # ---------- (1) Resize ----------
+        if self.resize is not None:
             resize_transform = transforms.Resize(self.resize)
             image = resize_transform(image)
             mask = resize_transform(mask)
         
-        # Random horizontal flip
-        if self.horizontal_flip and random.random() > 0.5:
-            image = transforms.functional.hflip(image)
-            mask = transforms.functional.hflip(mask)
-        
-        # Random vertical flip
-        if self.vertical_flip and random.random() > 0.5:
-            image = transforms.functional.vflip(image)
-            mask = transforms.functional.vflip(mask)
-        
-        # Random rotation
-        if self.rotation:
-            angle = random.randint(-self.rotation, self.rotation)
-            image = transforms.functional.rotate(image, angle)
-            mask = transforms.functional.rotate(mask, angle)
-
-        # Center crop
+        # ---------- (6) Center Crop ----------
         if self.center_crop is not None:
             image = transforms.CenterCrop(self.center_crop)(image)
             mask = transforms.CenterCrop(self.center_crop)(mask)
         
-        ## Color transformation
-        # Random brightness
+        # ---------- (2) Horizontal flip ----------
+        if self.horizontal_flip and random.random() > 0.5:
+            image = transforms.functional.hflip(image)
+            mask = transforms.functional.hflip(mask)
+
+        # ---------- (3) Vertical flip ----------
+        if self.vertical_flip and random.random() > 0.5:
+            image = transforms.functional.vflip(image)
+            mask = transforms.functional.vflip(mask)
+
+        # ---------- (4) Random Rotation ----------
+        if self.rotation and self.rotation > 0:
+            angle = random.randint(-self.rotation, self.rotation)
+            image = transforms.functional.rotate(image, angle)
+            mask = transforms.functional.rotate(mask, angle)
+
+        # ---------- (5) Random Affine ----------
+        if self.random_affine:
+            image = transforms.RandomAffine(degrees =0, shear = 10, translate= (0, 0))(image)
+            mask = transforms.RandomAffine(degrees =0, shear = 10, translate= (0, 0))(mask)
+        
+        # ---------- (7) Random Brightness (Albumentations) ----------
         if self.random_brightness:
-            image = A.RandomBrightnessContrast(p=0.5)(image = np.array(image))['image'] # albumentation은 np.array로 받아야함
+            image = A.RandomBrightnessContrast(p=0.5)(
+                image = np.array(image),
+                brightness_limit = (-0.1, 0.1),
+                contrast_limit = (-0.1, 0.1),
+                p = 0.5,
+            )['image'] # albumentation은 np.array로 받아야함
             image = Image.fromarray(image)
 
-        if self.interpolation:
-            image = transforms.functional.resize(image, self.resize, interpolation=self.interpolation)
-            mask = transforms.functional.resize(mask, self.resize, interpolation=self.interpolation)
-                
-        # To Tensor
+        # ---------- (8) ToTensor ----------
         image = transforms.ToTensor()(image)
         mask = transforms.ToTensor()(mask)
-        
-        image = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(image)
-        
+
         return image, mask
 
 

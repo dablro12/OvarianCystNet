@@ -16,13 +16,12 @@ def memory_release(model):
     torch.cuda.empty_cache()
     del model
 
-def dataloader_builder(test_csv_path:str, root_dir:str, class_num:int, input_res = (3, 224, 224), bs_size = 40, mask_use = False):
+def dataloader_builder(test_csv_path:str, data_type:str, root_dir:str, class_num:int, input_res = (3, 224, 224), bs_size = 40, mask_use = False):
+    
+    print("Building Test Loader...")
+    print("[Data Type]:", data_type)
     test_augment_list = JointTransform(
         resize=(input_res[1], input_res[2]),
-        horizontal_flip=False,
-        vertical_flip=False,
-        rotation=0,
-        interpolation=False,
     )
     test_dataset = Custom_pcos_dataset(
         df = pd.read_csv(test_csv_path),
@@ -30,6 +29,7 @@ def dataloader_builder(test_csv_path:str, root_dir:str, class_num:int, input_res
         joint_transform = test_augment_list,
         mask_use = mask_use,
         class_num = class_num,
+        data_type = data_type
     )
     test_loader = DataLoader(dataset = test_dataset, batch_size = bs_size, shuffle = False, num_workers=16)
 
