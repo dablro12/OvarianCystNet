@@ -1,0 +1,377 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Currently logged in as: dablro1232 (dablro12). Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.18.1
+wandb: Run data is saved locally in /home/eiden/eiden/PCOS-roi-classification/wandb/run-20241226_154213-ericyqzt
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run resnet_original
+wandb: ⭐️ View project at https://wandb.ai/dablro12/multi-octc-classifier
+wandb: 🚀 View run at https://wandb.ai/dablro12/multi-octc-classifier/runs/ericyqzt
+[41m[Run Name] original[0m
+mean: [0.166 0.166 0.166], std: [0.204 0.204 0.204]
+[41mFinished Data Loading[0m
+[41mDataset Distribution[0m
+[Train Distribution] {'0': 1630, '1': 1630, '2': 1630}
+[Valid Distribution] {'0': 427, '1': 137, '2': 80}
+Weight Tensor: [0.09342185407876968, 0.37599411606788635, 0.5305840373039246]
+Model 'resnet' loaded.
+[41mFinished Model Initialization[0m
+/home/eiden/miniconda3/envs/cv/lib/python3.8/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=ResNet34_Weights.IMAGENET1K_V1`. You can also use `weights=ResNet34_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/home/eiden/miniconda3/envs/cv/lib/python3.8/site-packages/torch/optim/lr_scheduler.py:60: UserWarning: The verbose parameter is deprecated. Please use get_last_lr() to access the learning rate.
+  warnings.warn(
+[Train] Epoch [1/100], Loss: 0.0601
+정확도=0.775%
+AUROC=0.921
+F1=0.768%
+재현율=[0.566, 0.881, 0.879]%
+특이도=[0.963, 0.837, 0.862]%
+[Validate] Epoch=1, Loss=0.1572
+정확도=0.66%
+AUROC=0.725
+F1=0.544%
+재현율=[0.745, 0.591, 0.325]%
+특이도=[0.631, 0.864, 0.876]%
+최적 모델이 다음 경로에 저장되었습니다: /mnt/hdd/octc/PCOS_experiment/multi_v4/checkpoint/resnet_original/best_model_fold_0_epoch_1.pth
+[Train] Epoch [2/100], Loss: 0.0054
+정확도=0.972%
+AUROC=0.997
+F1=0.971%
+재현율=[0.939, 0.988, 0.988]%
+특이도=[0.99, 0.98, 0.987]%
+[Validate] Epoch=2, Loss=0.2452
+정확도=0.688%
+AUROC=0.746
+F1=0.543%
+재현율=[0.799, 0.606, 0.238]%
+특이도=[0.631, 0.844, 0.926]%
+[Train] Epoch [3/100], Loss: 0.0007
+정확도=0.998%
+AUROC=1.0
+F1=0.998%
+재현율=[0.995, 0.999, 0.999]%
+특이도=[0.999, 0.998, 1.0]%
+[Validate] Epoch=3, Loss=0.2616
+정확도=0.686%
+AUROC=0.771
+F1=0.561%
+재현율=[0.766, 0.664, 0.3]%
+특이도=[0.728, 0.844, 0.887]%
+[Train] Epoch [4/100], Loss: 0.0001
+정확도=0.999%
+AUROC=1.0
+F1=0.999%
+재현율=[0.998, 1.0, 1.0]%
+특이도=[1.0, 0.999, 1.0]%
+[Validate] Epoch=4, Loss=0.2708
+정확도=0.655%
+AUROC=0.771
+F1=0.538%
+재현율=[0.712, 0.693, 0.288]%
+특이도=[0.765, 0.807, 0.871]%
+[Train] Epoch [5/100], Loss: 0.0001
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[0.999, 1.0, 1.0]%
+특이도=[1.0, 0.999, 1.0]%
+[Validate] Epoch=5, Loss=0.2795
+정확도=0.649%
+AUROC=0.77
+F1=0.536%
+재현율=[0.703, 0.686, 0.3]%
+특이도=[0.765, 0.803, 0.867]%
+[Train] Epoch [6/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=6, Loss=0.2856
+정확도=0.711%
+AUROC=0.769
+F1=0.552%
+재현율=[0.838, 0.606, 0.212]%
+특이도=[0.636, 0.876, 0.922]%
+[Train] Epoch [7/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=7, Loss=0.2905
+정확도=0.652%
+AUROC=0.769
+F1=0.535%
+재현율=[0.71, 0.686, 0.288]%
+특이도=[0.76, 0.805, 0.871]%
+[Train] Epoch [8/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=8, Loss=0.2920
+정확도=0.648%
+AUROC=0.769
+F1=0.532%
+재현율=[0.703, 0.686, 0.288]%
+특이도=[0.765, 0.807, 0.862]%
+[Train] Epoch [9/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=9, Loss=0.2946
+정확도=0.646%
+AUROC=0.768
+F1=0.531%
+재현율=[0.7, 0.686, 0.288]%
+특이도=[0.765, 0.805, 0.862]%
+[Train] Epoch [10/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=10, Loss=0.2973
+정확도=0.634%
+AUROC=0.768
+F1=0.514%
+재현율=[0.686, 0.693, 0.25]%
+특이도=[0.783, 0.771, 0.871]%
+[Train] Epoch [11/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=11, Loss=0.2999
+정확도=0.613%
+AUROC=0.768
+F1=0.511%
+재현율=[0.637, 0.73, 0.288]%
+특이도=[0.829, 0.753, 0.846]%
+[Train] Epoch [12/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=12, Loss=0.3025
+정확도=0.615%
+AUROC=0.768
+F1=0.515%
+재현율=[0.637, 0.73, 0.3]%
+특이도=[0.829, 0.755, 0.846]%
+[Train] Epoch [13/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=13, Loss=0.3050
+정확도=0.648%
+AUROC=0.768
+F1=0.529%
+재현율=[0.705, 0.686, 0.275]%
+특이도=[0.76, 0.789, 0.879]%
+[Train] Epoch [14/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=14, Loss=0.3060
+정확도=0.623%
+AUROC=0.768
+F1=0.517%
+재현율=[0.656, 0.715, 0.288]%
+특이도=[0.811, 0.771, 0.848]%
+[Train] Epoch [15/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=15, Loss=0.3072
+정확도=0.623%
+AUROC=0.768
+F1=0.517%
+재현율=[0.656, 0.715, 0.288]%
+특이도=[0.811, 0.771, 0.848]%
+[Train] Epoch [16/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=16, Loss=0.3084
+정확도=0.624%
+AUROC=0.768
+F1=0.52%
+재현율=[0.656, 0.715, 0.3]%
+특이도=[0.811, 0.773, 0.848]%
+[Train] Epoch [17/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=17, Loss=0.3096
+정확도=0.7%
+AUROC=0.768
+F1=0.553%
+재현율=[0.813, 0.62, 0.238]%
+특이도=[0.654, 0.864, 0.913]%
+[Train] Epoch [18/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=18, Loss=0.3109
+정확도=0.7%
+AUROC=0.768
+F1=0.553%
+재현율=[0.813, 0.62, 0.238]%
+특이도=[0.654, 0.864, 0.913]%
+[Train] Epoch [19/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=19, Loss=0.3122
+정확도=0.702%
+AUROC=0.767
+F1=0.551%
+재현율=[0.817, 0.62, 0.225]%
+특이도=[0.65, 0.866, 0.915]%
+[Train] Epoch [20/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+[Validate] Epoch=20, Loss=0.3127
+정확도=0.702%
+AUROC=0.767
+F1=0.551%
+재현율=[0.817, 0.62, 0.225]%
+특이도=[0.65, 0.866, 0.915]%
+[Train] Epoch [21/100], Loss: 0.0000
+정확도=1.0%
+AUROC=1.0
+F1=1.0%
+재현율=[1.0, 1.0, 1.0]%
+특이도=[1.0, 1.0, 1.0]%
+wandb: - 0.011 MB of 0.011 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                    learning_rate ███████▄▄▄▄▄▄▂▂▂▂▂▂▁▁
+wandb:                        train_acc ▁▇███████████████████
+wandb:                    train_acc_opt ▁▇███████████████████
+wandb:                        train_auc ▁████████████████████
+wandb:                    train_auc_opt ▁████████████████████
+wandb:                         train_f1 ▁▇███████████████████
+wandb:                     train_f1_opt ▁▇███████████████████
+wandb:                       train_loss █▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:       train_sensitivity_Abnormal ▁████████████████████
+wandb:   train_sensitivity_Abnormal_opt ▁▇███████████████████
+wandb:     train_sensitivity_Borderline ▁▇███████████████████
+wandb: train_sensitivity_Borderline_opt ▁▇███████████████████
+wandb:         train_sensitivity_Normal ▁▇███████████████████
+wandb:     train_sensitivity_Normal_opt ▁▇███████████████████
+wandb:       train_specificity_Abnormal ▁▇███████████████████
+wandb:   train_specificity_Abnormal_opt ▁▇███████████████████
+wandb:     train_specificity_Borderline ▁▇███████████████████
+wandb: train_specificity_Borderline_opt ▁▇███████████████████
+wandb:         train_specificity_Normal ▁▅███████████████████
+wandb:     train_specificity_Normal_opt ▁▆███████████████████
+wandb:        train_thresholds_Abnormal ▁▃▃▆▇▇███████████████
+wandb:      train_thresholds_Borderline ▁▂▂▃▄▅▆▆▇▇▇▇▇████████
+wandb:          train_thresholds_Normal ▁▂▃▁▂▃▄▆▆▇▇▇▇████████
+wandb:                        valid_acc ▁▇█▇▇▇▇██████████████
+wandb:                    valid_acc_opt ▄▆▆▄▄█▄▄▃▃▁▁▄▂▂▂▇▇▇▇▇
+wandb:                        valid_auc ▁▄████████████████▇▇▇
+wandb:                    valid_auc_opt ▁▄████████████████▇▇▇
+wandb:                         valid_f1 █▄▆▁▂▃▃▄▄▅▅▄▄▄▄▄▄▄▄▄▄
+wandb:                     valid_f1_opt ▆▅█▅▅▇▄▄▄▁▁▂▄▂▂▂▇▇▇▇▇
+wandb:                       valid_loss ▁▅▆▆▆▇▇▇▇▇▇██████████
+wandb:       valid_sensitivity_Abnormal █▂▂▁▁▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+wandb:   valid_sensitivity_Abnormal_opt █▃▆▆▆▁▆▆▆▃▆▆▅▆▆▆▃▃▂▂▂
+wandb:     valid_sensitivity_Borderline █▂▁▁▁▁▁▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb: valid_sensitivity_Borderline_opt ▁▂▅▆▆▂▆▆▆▆██▆▇▇▇▂▂▂▂▂
+wandb:         valid_sensitivity_Normal ▁▇███████████████████
+wandb:     valid_sensitivity_Normal_opt ▅▇▅▄▃█▄▃▃▃▁▁▃▂▂▂▇▇▇▇▇
+wandb:       valid_specificity_Abnormal ▁████████████████████
+wandb:   valid_specificity_Abnormal_opt ▄█▅▃▃█▃▂▂▃▁▁▄▁▁▁▇▇▇▇▇
+wandb:     valid_specificity_Borderline ▁▆███████████████████
+wandb: valid_specificity_Borderline_opt ▇▆▆▄▄█▄▄▄▂▁▁▃▂▂▂▇▇▇▇▇
+wandb:         valid_specificity_Normal █▂▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:     valid_specificity_Normal_opt ▁▁▄▆▆▁▆▆▆▆██▆▇▇▇▂▂▂▂▂
+wandb:        valid_thresholds_Abnormal █▃▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁
+wandb:      valid_thresholds_Borderline █▃▄▃▃▃▃▃▃▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:          valid_thresholds_Normal ▁▅▆▇▇▅▇▇▇███████▆▆▆▆▆
+wandb: 
+wandb: Run summary:
+wandb:                    learning_rate 1e-05
+wandb:                        train_acc 1
+wandb:                    train_acc_opt 1
+wandb:                        train_auc 1
+wandb:                    train_auc_opt 1
+wandb:                         train_f1 1
+wandb:                     train_f1_opt 1
+wandb:                       train_loss 0.0
+wandb:       train_sensitivity_Abnormal 1
+wandb:   train_sensitivity_Abnormal_opt 1
+wandb:     train_sensitivity_Borderline 1
+wandb: train_sensitivity_Borderline_opt 1
+wandb:         train_sensitivity_Normal 1
+wandb:     train_sensitivity_Normal_opt 1
+wandb:       train_specificity_Abnormal 1
+wandb:   train_specificity_Abnormal_opt 1
+wandb:     train_specificity_Borderline 1
+wandb: train_specificity_Borderline_opt 1
+wandb:         train_specificity_Normal 1
+wandb:     train_specificity_Normal_opt 1
+wandb:        train_thresholds_Abnormal 0.947
+wandb:      train_thresholds_Borderline 0.909
+wandb:          train_thresholds_Normal 0.803
+wandb:                        valid_acc 0.73
+wandb:                    valid_acc_opt 0.702
+wandb:                        valid_auc 0.767
+wandb:                    valid_auc_opt 0.767
+wandb:                         valid_f1 0.519
+wandb:                     valid_f1_opt 0.551
+wandb:                       valid_loss 0.31338
+wandb:       valid_sensitivity_Abnormal 0.125
+wandb:   valid_sensitivity_Abnormal_opt 0.225
+wandb:     valid_sensitivity_Borderline 0.438
+wandb: valid_sensitivity_Borderline_opt 0.62
+wandb:         valid_sensitivity_Normal 0.937
+wandb:     valid_sensitivity_Normal_opt 0.817
+wandb:       valid_specificity_Abnormal 0.977
+wandb:   valid_specificity_Abnormal_opt 0.915
+wandb:     valid_specificity_Borderline 0.939
+wandb: valid_specificity_Borderline_opt 0.866
+wandb:         valid_specificity_Normal 0.401
+wandb:     valid_specificity_Normal_opt 0.65
+wandb:        valid_thresholds_Abnormal 0.011
+wandb:      valid_thresholds_Borderline 0.054
+wandb:          valid_thresholds_Normal 0.77
+wandb: 
+wandb: 🚀 View run resnet_original at: https://wandb.ai/dablro12/multi-octc-classifier/runs/ericyqzt
+wandb: ⭐️ View project at: https://wandb.ai/dablro12/multi-octc-classifier
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20241226_154213-ericyqzt/logs
+[Validate] Epoch=21, Loss=0.3134
+정확도=0.702%
+AUROC=0.767
+F1=0.551%
+재현율=[0.817, 0.62, 0.225]%
+특이도=[0.65, 0.866, 0.915]%
+Early stopping triggered
+이전 최적 모델을 삭제했습니다: /mnt/hdd/octc/PCOS_experiment/multi_v4/checkpoint/resnet_original/best_model_fold_0_epoch_1.pth
+최적 모델이 다음 경로에 저장되었습니다: /mnt/hdd/octc/PCOS_experiment/multi_v4/checkpoint/resnet_original/best_model_fold_0_epoch_21.pth

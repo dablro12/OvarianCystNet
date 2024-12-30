@@ -77,6 +77,18 @@ def kfold_extract(csv_path, n_splits = 5, shuffle = True, random_state = 627):
     # print_label_distribution(folds, train_df, test_df)
     return folds, train_df, test_df
 
+def label_counter(loader):
+    label_counter = {
+        '0': 0,
+        '1': 0,
+        '2': 0,
+    }
 
-
+    for inputs, masks, labels in loader:
+        # label 클래스별 개수 확인
+        label_counter['0'] += labels.numpy().tolist().count(0)  # 쉼표 제거
+        label_counter['1'] += labels.numpy().tolist().count(1)  # 쉼표 제거
+        label_counter['2'] += labels.numpy().tolist().count(2)  # 쉼표 제거
+        
+    return label_counter
 

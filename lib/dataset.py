@@ -5,8 +5,8 @@ import numpy as np
 import torch 
 import random
 from torchvision import transforms
-import albumentations as A
-
+# import albumentations as A
+from torch.utils.data import DataLoader
 class Custom_stratified_Dataset(Dataset):
     def __init__(self, df, root_dir, transform = None): #transform 가지고올거있으면 가지고 오기 
         self.df, self.root_dir = df, root_dir 
@@ -101,14 +101,17 @@ class Custom_pcos_dataset(Dataset):
     def __init__(self, 
             df, 
             root_dir, 
-            joint_transform:None, 
             mask_use:bool, 
             class_num:int, 
-            data_type:str):
+            data_type:str,
+            joint_transform=False, 
+            torch_transform= False,
+        ):
         self.df = df
         self.root_dir = root_dir
         self.mask_use = mask_use
         self.joint_transform = joint_transform
+        self.torch_transform = torch_transform
         self.image_paths = []
         self.mask_paths = []
         
@@ -160,6 +163,9 @@ class Custom_pcos_dataset(Dataset):
         # Joint transform이 있다면 (image, mask) 같이 augment
         if self.joint_transform:
             image, mask = self.joint_transform(image, mask)
+        elif self.torch_transform:
+            image = self.torch_transform(image)
+            mask = self.torch_transform(mask)
 
         # 라벨 텐서에서 idx 위치의 값을 꺼냄
         label = self.labels_tensor[idx]
@@ -189,6 +195,8 @@ class JointTransform:
         rotation=False,
         random_brightness = False,
         random_affine = False,
+        normalize_mean = [0.1663, 0.1663, 0.1663],
+        normalize_std = [0.2037, 0.2037, 0.2037]
         ):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
@@ -197,6 +205,8 @@ class JointTransform:
         self.center_crop = center_crop
         self.random_brightness = random_brightness
         self.random_affine = random_affine
+        self.normalize_mean = normalize_mean
+        self.normalize_std = normalize_std
         
     def __call__(self, image, mask):
         # ---------- (1) Resize ----------
@@ -211,32 +221,32 @@ class JointTransform:
             mask = transforms.CenterCrop(self.center_crop)(mask)
         
         # ---------- (2) Horizontal flip ----------
-        if self.horizontal_flip and random.random() > 0.5:
+        if self.horizontal_flip:
             image = transforms.functional.hflip(image)
             mask = transforms.functional.hflip(mask)
 
         # ---------- (3) Vertical flip ----------
-        if self.vertical_flip and random.random() > 0.5:
+        if self.vertical_flip:
             image = transforms.functional.vflip(image)
             mask = transforms.functional.vflip(mask)
 
         # ---------- (4) Random Rotation ----------
-        if self.rotation and self.rotation > 0:
+        if self.rotation:
             angle = random.randint(-self.rotation, self.rotation)
             image = transforms.functional.rotate(image, angle)
             mask = transforms.functional.rotate(mask, angle)
 
         # ---------- (5) Random Affine ----------
         if self.random_affine:
-            image = transforms.RandomAffine(degrees =0, shear = 10, translate= (0, 0))(image)
-            mask = transforms.RandomAffine(degrees =0, shear = 10, translate= (0, 0))(mask)
+            image = transforms.RandomAffine(scale = (0.8, 1.2), degrees =0, shear = 0, translate= (0, 0.2))(image)
+            mask = transforms.RandomAffine(scale = (0.8, 1.2), degrees =0, shear = 0, translate= (0, 0.2))(mask)
         
         # ---------- (7) Random Brightness (Albumentations) ----------
         if self.random_brightness:
             image = A.RandomBrightnessContrast(p=0.5)(
                 image = np.array(image),
-                brightness_limit = (-0.1, 0.1),
-                contrast_limit = (-0.1, 0.1),
+                brightness_limit = (-0.2, 0.2),
+                contrast_limit = (-0.2, 0.2),
                 p = 0.5,
             )['image'] # albumentation은 np.array로 받아야함
             image = Image.fromarray(image)
@@ -245,6 +255,9 @@ class JointTransform:
         image = transforms.ToTensor()(image)
         mask = transforms.ToTensor()(mask)
 
+        # ---------- (9) Normalize ----------
+        if self.normalize_mean is not None and self.normalize_std is not None:
+            image = transforms.Normalize(mean = self.normalize_mean, std = self.normalize_std)(image)
         return image, mask
 
 
@@ -324,6 +337,48 @@ class BalancedBatchSampler(BatchSampler):
 #%% Imbalnaned Dataset
 from sklearn.utils.class_weight import compute_class_weight
 
-def get_class_weights(labels, num_classes, device):
-    class_weights = compute_class_weight(class_weight='balanced', classes=np.arange(num_classes), y=labels)
-    return torch.tensor(class_weights, dtype=torch.float).to(device)
+def get_class_weights(dataset):
+    unique, cnts = np.unique(dataset.labels_tensor.numpy(), return_counts=True)
+    weight = torch.tensor(cnts).float().sum() / torch.tensor(cnts).float()
+    return weight / weight.sum()
+
+
+
+def compute_mean_std(dataset, batch_size=32, num_workers=8):
+    """
+    dataset (torch.utils.data.Dataset): 이미 ToTensor()가 적용되는 Dataset
+    """
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
+    
+    # 채널별 누적을 위한 변수 (float 로 해야 함)
+    channel_sum = torch.zeros(3)
+    channel_squared_sum = torch.zeros(3)
+    
+    num_samples = 0
+    
+    for imgs, _, _ in loader:
+        # imgs shape = (B, C, H, W)
+        # B: batch_size
+        # C: 채널 수 (3)
+        
+        batch_size_current = imgs.size(0)
+        # (B, C, H, W) -> (C, B*H*W)
+        imgs = imgs.view(batch_size_current, 3, -1)  # 예: (32, 3, 224*224)
+        
+        # channel-wise sum
+        channel_sum += imgs.mean(dim=(0,2)) * batch_size_current  
+        # channel-wise squared sum (분산 계산용)
+        channel_squared_sum += (imgs ** 2).mean(dim=(0,2)) * batch_size_current
+        
+        num_samples += batch_size_current
+
+    # 채널별 mean
+    mean = channel_sum / num_samples
+    # 채널별 표준편차 = sqrt(E[X^2] - (E[X])^2)
+    # 여기서 E[X^2] = channel_squared_sum / num_samples
+    mean_sq = channel_squared_sum / num_samples
+    std = torch.sqrt(mean_sq - mean ** 2)
+    
+    return mean, std
+        
+        

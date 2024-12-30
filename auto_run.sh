@@ -37,8 +37,6 @@ declare -a BACKBONE_MODELS=("vit-google")
 declare -a VERSIONS=("origin" "originwithaugment")
 declare -a MASK_USES=("no" "no")
 
-
-
 declare -A MODEL_TYPES
 MODEL_TYPES["resnet"]="resnet34"
 MODEL_TYPES["mobilenet"]="l"

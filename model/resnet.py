@@ -57,7 +57,6 @@ class multi_model(nn.Module):
             with torch.no_grad():
                 self.base_model.conv1.weight[:, :3, :, :] = self.base_model.conv1.weight[:, :3, :, :]  # 기존 RGB 가중치 복사
                 self.base_model.conv1.weight[:, 3:, :, :].zero_()  # 새 채널은 0으로 초기화
-            num_classes = 1 
             self.base_model.fc = nn.Linear(512, num_classes)
             # vgg16 마지막 분류기 부분을 바이너리 분류에 맞게 변경
         
