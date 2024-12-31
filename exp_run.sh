@@ -9,7 +9,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=50 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="baseline_aug-lr0.000002" \
+    --run_name="resizecropwithaug-lr0.000002" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -19,7 +19,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=50 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="baseline_aug-lr0.000002" \
+    --run_name="resizecropwithaug-lr0.000002" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -29,7 +29,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=50 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="baseline_aug-lr0.000002" \
+    --run_name="resizecropwithaug-lr0.000002" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -39,7 +39,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=50 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="baseline_aug-lr0.000002" \
+    --run_name="resizecropwithaug-lr0.000002" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -49,7 +49,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=50 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="baseline_aug-lr0.000002" \
+    --run_name="resizecropwithaug-lr0.000002" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -59,5 +59,5 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=50 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="baseline_aug-lr0.000002" \
+    --run_name="resizecropwithaug-lr0.000002" \
 

@@ -21,7 +21,7 @@ import wandb
 
 from lib.seed import set_seed
 from lib.loss import FocalLoss, smooth_labels
-from lib.dataset import Custom_df_dataset, JointTransform, Custom_pcos_dataset, get_class_weights, compute_mean_std
+from lib.dataset import Custom_df_dataset, JointTransform, Custom_pcos_dataset, Custom_pcos_dataset_BERT, get_class_weights, compute_mean_std
 from lib.datasets.sampler import class_weight_getter
 from lib.datasets.ds_tools import label_counter
 from model.loader import model_Loader
@@ -53,11 +53,9 @@ class multi_exp_classification:
 
     def _init_device(self):
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    def _get_ds_loader(self):
-        print(f"\033[41m[Run Name] {self.run_name}\033[0m")
-        mean, std = compute_mean_std(
-            dataset = Custom_pcos_dataset(
+    def _compute_normalize_vector(self):
+        return compute_mean_std(
+            dataset = Custom_pcos_dataset_BERT(
                 pd.read_csv('/mnt/hdd/octc/PCOS_Dataset/train_split.csv'),
                 root_dir="/mnt/hdd/octc/PCOS_Dataset",
                 joint_transform=False,
@@ -70,59 +68,61 @@ class multi_exp_classification:
                 data_type = "Dataset"
             )
         )
+    def _get_ds_loader(self):
+        print(f"\033[41m[Run Name] {self.run_name}\033[0m")
+        mean, std = self._compute_normalize_vector()
+        
         print(f"mean: {np.round(mean.tolist(), 3)}, std: {np.round(std.tolist(),3)}")
-        transform = JointTransform(
-            # resize=(224, 224),
-            resize=(284, 284),
-            center_crop=(224, 224),
-            horizontal_flip=True,   # 데이터 증강수 : x2
-            vertical_flip=True,     # 데이터 증강수 : x2
-            # random_affine=True,
-            rotation=10,           # 데이터 증강수 : x8
-            random_brightness=True,
-            normalize_mean = mean.tolist(),
-            normalize_std = std.tolist()
-        )
-        train_dataset = Custom_pcos_dataset(
+        train_dataset = Custom_pcos_dataset_BERT(
             df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/train_split.csv"),
             root_dir="/mnt/hdd/octc/PCOS_Dataset",
-            joint_transform= transform,
-            torch_transform= False,
-            mask_use=False,
-            class_num=3,
-            data_type="Dataset",
-        )
-        
-        val_dataset = Custom_pcos_dataset(
-            df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/test_split.csv"),
-            root_dir="/mnt/hdd/octc/PCOS_Dataset",
-            joint_transform=JointTransform(
-                resize=(284, 284),
-                center_crop = (224, 224),
+            joint_transform= JointTransform(
+                resize=(224, 224),
+                # resize=(284, 284),
+                # center_crop=(224, 224),
+                horizontal_flip=True,   # 데이터 증강수 : x2
+                vertical_flip=True,     # 데이터 증강수 : x2
+                random_affine=True,
+                rotation=10,           # 데이터 증강수 : x8
+                # random_brightness=True,
                 normalize_mean = mean.tolist(),
                 normalize_std = std.tolist()
             ),
             torch_transform= False,
             mask_use=False,
-            class_num=3,
+            class_num=768,
+            data_type="Dataset",
+        )
+        
+        val_dataset = Custom_pcos_dataset_BERT(
+            df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/test_split.csv"),
+            root_dir="/mnt/hdd/octc/PCOS_Dataset",
+            joint_transform=JointTransform(
+                resize=(224, 224),
+                normalize_mean = mean.tolist(),
+                normalize_std = std.tolist()
+            ),
+            torch_transform= False,
+            mask_use=False,
+            class_num=768,
             data_type="Dataset"
         )
         
         train_loader = DataLoader(
             train_dataset,
             batch_size=48,
-            shuffle = True,
+            # shuffle = True,
             sampler=BalancedBatchSampler(train_dataset, labels=train_dataset.labels_tensor), 
             # ↑ BalancedBatchSampler 사용 (ImbalancedDatasetSampler에서 변경)
             num_workers=16,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True,
         )
         val_loader = DataLoader(
             val_dataset,
             batch_size=8,
             shuffle=False,
             num_workers=16,
-            pin_memory=True if self.device.type == 'cuda' else False,
+            pin_memory=True,
         )
         
         # 데이터 분포를 통해 Crossweight에 가중치를 부여
@@ -134,24 +134,38 @@ class multi_exp_classification:
         print("[Valid Distribution]",label_counter(val_loader))
         print(f"Weight Tensor: {self.weight_tensor.tolist()}")
         
+        self.label_embeddings, self.class_names, self.label_emb_tensor, self.label_to_idx = self.label_embed(train_dataset)
+        
         return train_loader, val_loader
-        
-    def _get_model_loader(self):
-        model = model_Loader(model_name=self.model_name, outlayer_num=3, type=self.model_type)
-        model.to(self.device)  # 모델을 디바이스로 이동
-        
-        optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.0001, weight_decay=1e-4)
-        
-        criterion = nn.CrossEntropyLoss(weight = self.weight_tensor, label_smoothing= 0.1).to(self.device)  # 손실함수
-        # criterion = FocalLoss(alpha=self.weight_tensor, gamma=2, reduction='mean').to(self.device)  # Focal Loss
+    def label_embed(self, dataset):
+        # 벨 임베딩 준비 (한 번만 수행)
+        label_embeddings = dataset.prepare_embed_vector()
 
-        # scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.95 ** epoch)
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+        # 클래스 임베딩 텐서 준비
+        class_names = list(label_embeddings.keys())
+        label_emb_tensor = torch.stack([label_embeddings[class_name] for class_name in class_names]).to('cuda:0')
+        label_emb_tensor = label_emb_tensor / label_emb_tensor.norm(dim=1, keepdim=True)  # 정규화
+
+        # 라벨 인덱스 매핑 준비 (한 번만 수행)
+        label_to_idx = {
+            tuple(v.cpu().numpy()): idx for idx, v in enumerate(label_emb_tensor)
+        }
+        return label_embeddings, class_names, label_emb_tensor, label_to_idx
+    def _get_model_loader(self):
+        model = model_Loader(model_name=self.model_name, outlayer_num=768, type=self.model_type).to(self.device)  # 모델을 디바이스로 이동
+        
+        optimizer = optim.AdamW(model.parameters(), lr=0.00001, weight_decay=1e-4)
+        
+        # criterion = nn.CrossEntropyLoss(weight = self.weight_tensor, label_smoothing= 0.1).to(self.device)  # 손실함수
+        # criterion = FocalLoss(alpha=self.weight_tensor, gamma=2, reduction='mean').to(self.device)  # Focal Loss
+        
+        # cosine similarity loss
+        criterion = nn.CosineEmbeddingLoss(margin=0.5).to(self.device)
+        
         # scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.001, step_size_up=5, step_size_down=5, mode='triangular2')
         scheduler = None
         print("\033[41mFinished Model Initialization\033[0m")
         return model, optimizer, criterion, scheduler
-    
     def save_best_model(self, epoch: int, val_loss: float):
         try:
             if self.best_model_path and os.path.exists(self.best_model_path):
@@ -175,31 +189,55 @@ class multi_exp_classification:
             print(f"에포크 {epoch}에서 모델 저장 중 오류 발생: {e}")
             
     def validate(self, epoch: int) -> float:
-        # 검증 함수 수정
+        """ Validation 루프 (CosineEmbeddingLoss & 유사도 기반 분류) """
         self.model.eval()
         total_loss = 0.0
 
+        # multi_classify_metrics_v2를 위한 리스트
         all_labels = []
         all_probs = []
 
         with torch.no_grad():
             for inputs, _, labels in self.val_loader:
                 inputs = inputs.to(self.device)
-                labels = labels.to(self.device).float()
+                labels = labels.to(self.device)  # shape: (batch_size, 768)
 
+                # (1) Forward & L2 정규화
                 outputs = self.model(inputs)
+                outputs = outputs / outputs.norm(dim=1, keepdim=True)
 
-                # 다중 분류
-                _, predicted = torch.max(outputs.data, 1)
-                labels = labels.long()
-
-                loss = self.criterion(outputs, labels)
+                # (2) CosineEmbeddingLoss
+                target = torch.ones(outputs.size(0)).to(self.device)
+                loss = self.criterion(outputs, labels, target)
                 total_loss += loss.item()
 
-                all_labels.extend(labels.detach().cpu().numpy())
-                all_probs.extend(torch.softmax(outputs, dim=1).detach().cpu().numpy())
+                # (3) 유사도 계산 & 예측
+                similarities = torch.matmul(outputs, self.label_emb_tensor.T)
+                # preds = torch.argmax(similarities, dim=1)
 
-        valid_loss = total_loss / len(self.val_loader)
+                # (4) 실제 라벨 → 인덱스
+                label_indices = []
+                for label in labels:
+                    label_np = label.cpu().numpy()
+                    found = False
+                    for key, idx in self.label_to_idx.items():
+                        if np.allclose(label_np, key, atol=1e-4):
+                            label_indices.append(idx)
+                            found = True
+                            break
+                    if not found:
+                        label_indices.append(-1)
+
+                label_indices = torch.tensor(label_indices).to(self.device)
+                valid = (label_indices != -1)
+
+                # multi_classify_metrics_v2에 넣기 위해, 유사도 행렬을 그대로 y_prob로 사용
+                # (주의: 실제 확률이 아님)
+                all_labels.extend(label_indices[valid].cpu().numpy())
+                all_probs.extend(similarities[valid].cpu().numpy())
+
+        valid_loss = total_loss / len(self.val_loader) if len(self.val_loader) > 0 else 0.0
+
 
         if not np.isfinite(valid_loss):
             print(f"경고: 에포크 {epoch}에서 유효하지 않은 평균 손실이 감지되었습니다. 손실을 무한대로 설정합니다.")
@@ -247,28 +285,47 @@ class multi_exp_classification:
 
     def train_epoch(self, epochs: int) -> Tuple[float, int]:
         final_val_loss = float('inf')
-
+        self.model.train()
         for epoch in range(1, epochs+1):
-            self.model.train()
             total_loss = 0.0
             
             all_labels = []
             all_probs = []
             
-            for inputs, _, labels in self.train_loader:
+            for inputs, _, labels, scalar_labels in self.train_loader:
                 self.optimizer.zero_grad()
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
+                target = torch.ones(outputs.size(0)).to('cuda:0') # 1로 설정 
 
                 outputs = self.model(inputs)
-                _, predicted = torch.max(outputs.data, 1)
-                labels = labels.long()
-                    
-                loss = self.criterion(outputs, labels)
+                outputs = outputs / outputs.norm(dim = 1, keepdim = True) # 샘플단위 정규화
+                loss = self.criterion(outputs, labels, target)
+
                 loss.backward()
                 self.optimizer.step()
                 total_loss += loss.item()
-
+                
+                # 정확도 계산
+                similarities = torch.matmul(outputs, self.label_emb_tensor.T)
+                predicted = torch.argmax(similarities, dim=1)
+                
+                # 실제 라벨을 인덱스로 변환
+                label_indices = []
+                for label in labels:
+                    label_np = label.cpu().numpy()
+                    found = False
+                    for key, idx in self.label_to_idx.items():
+                        if np.array_equal(key, label_np):
+                            label_indices.append(idx)
+                            found = True
+                            break
+                    if not found:
+                        raise ValueError(f"라벨 {label_np}에 대한 인덱스를 찾을 수 없습니다.")
+                        label_indices.append(-1)
+                label_indices = torch.tensor(label_indices).to('cuda:0')
+                valid = label_indices != -1
+                
                 all_labels.extend(labels.detach().cpu().numpy())
                 all_probs.extend(torch.softmax(outputs, dim=1).detach().cpu().numpy())
 
@@ -315,7 +372,7 @@ class multi_exp_classification:
             final_val_loss = val_loss
 
             # 학습률 스케줄러
-            self.scheduler.step(val_loss)
+            # self.scheduler.step(val_loss)
 
             # Early stopping 로직
             if val_loss < self.best_val_loss:
@@ -410,8 +467,8 @@ class binary_exp_classification:
             center_crop=(224, 224),
             horizontal_flip=True,   # 데이터 증강: x2
             vertical_flip=True,     # 데이터 증강: x2
-            # random_affine=True,
-            rotation=10,            # 데이터 증강: x8
+            random_affine=True,
+            rotation=45,            # 데이터 증강: x8
             random_brightness=True,
             
             # Default
@@ -433,8 +490,7 @@ class binary_exp_classification:
             df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/test_split.csv"),
             root_dir="/mnt/hdd/octc/PCOS_Dataset",
             joint_transform=JointTransform(
-                resize=(284, 284),
-                center_crop=(224, 224),
+                resize=(224, 224),
                 normalize_mean = mean.tolist(),
                 normalize_std = std.tolist()
             ),
@@ -447,8 +503,8 @@ class binary_exp_classification:
         train_loader = DataLoader(
             train_dataset,
             batch_size=32,
-            # shuffle = True,
-            sampler=BalancedBatchSampler(dataset = train_dataset, labels=train_dataset.labels_tensor), 
+            shuffle = True,
+            # sampler=BalancedBatchSampler(dataset = train_dataset, labels=train_dataset.labels_tensor), 
             num_workers=16,
             pin_memory=True if self.device.type == 'cuda' else False,
         )

@@ -5,7 +5,7 @@ import numpy as np
 import torch 
 import random
 from torchvision import transforms
-# import albumentations as A
+import albumentations as A
 from torch.utils.data import DataLoader
 class Custom_stratified_Dataset(Dataset):
     def __init__(self, df, root_dir, transform = None): #transform 가지고올거있으면 가지고 오기 
@@ -39,7 +39,7 @@ class Custom_df_dataset(Dataset):
         self.labels = []
         
         for idx, row in self.df.iterrows():
-            self.image_paths.append(os.path.join(root_dir, row['img_name']+ '.png'))
+            self.image_paths.append(os.path.join(root_dir, row['ID']+ '.png'))
             self.labels.append(row['label'])
     def get_labels(self):
         return self.labels
@@ -114,10 +114,8 @@ class Custom_pcos_dataset(Dataset):
         self.torch_transform = torch_transform
         self.image_paths = []
         self.mask_paths = []
-        
         # 모든 라벨을 담아둘 임시 리스트
         label_list = []
-
         # 파일 경로 및 라벨 구성
         for _, row in self.df.iterrows():
             # (1) 이미지 경로 세팅
@@ -138,12 +136,119 @@ class Custom_pcos_dataset(Dataset):
                     label_list.append(0)
                 else:
                     label_list.append(1)
-            else:
-                # 3개 클래스 그대로 사용한다고 가정
-                label_list.append(row['label'])
+            else: # 3개 클래스 그대로 사용한다고 가정
+                label_list.append(row['label'])# (4) label_list를 텐서로 변환해 보관
         
-        # (4) label_list를 텐서로 변환해 보관
-        self.labels_tensor = torch.tensor(label_list, dtype=torch.long)
+        # label_list 내부에 데이터가 숫자이면 tensor 변환
+        if type(label_list[0]) == int:
+            self.labels_tensor = torch.tensor(label_list, dtype=torch.long)
+
+        
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        """ __getitem__에서는 실제 (image, mask, label)을 만듭니다. """
+        image_path = self.image_paths[idx]
+        image = Image.open(image_path).convert('RGB')
+
+        # 마스크가 필요 없다면 빈 마스크를 리턴
+        if self.mask_use:
+            mask_path = self.mask_paths[idx]
+            mask = Image.open(mask_path).convert('L')
+        else:
+            mask = Image.new('L', image.size)
+
+        # Joint transform이 있다면 (image, mask) 같이 augment
+        if self.joint_transform:
+            image, mask = self.joint_transform(image, mask)
+        elif self.torch_transform:
+            image = self.torch_transform(image)
+            mask = self.torch_transform(mask)
+
+        # 라벨 텐서에서 idx 위치의 값을 꺼냄
+        label = self.labels_tensor[idx]
+        return image, mask, label
+class Custom_pcos_dataset_BERT(Dataset):
+    def __init__(self, 
+                 df, 
+                 root_dir, 
+                 mask_use: bool, 
+                 class_num: int, 
+                 data_type: str,
+                 joint_transform=None, 
+                 torch_transform=False):
+        self._import_library()
+        
+        self.df = df
+        self.root_dir = root_dir
+        self.mask_use = mask_use
+        self.joint_transform = joint_transform
+        self.torch_transform = torch_transform
+        self.image_paths = []
+        self.mask_paths = []
+        self.bert_label = bert_labeler(
+            model_name="microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext", 
+            device="cuda:0"
+        )
+        label_list = []
+        self.scalar_label_list = []  # 스칼라 라벨을 저장할 리스트
+
+        # 파일 경로 및 라벨 구성
+        for idx, row in self.df.iterrows():
+            # 이미지 경로
+            self.image_paths.append(os.path.join(root_dir, data_type, f'{row["ID"]}.png'))
+
+            # 마스크 경로 (mask_use=True일 때)
+            if self.mask_use:
+                self.mask_paths.append(os.path.join(root_dir, 'mask', f'{row["ID"]}.png'))
+
+            # 라벨 처리
+            if class_num == 1:
+                # 이진 분류 예시
+                if row['label'] == 0:
+                    label_list.append(0)
+                else:
+                    label_list.append(1)
+                self.scalar_label_list.append(0 if row['label'] == 0 else 1)
+            elif class_num == 768:  # BERT Embedding 사용 시
+                if idx == 0:
+                    print(f"Label Embedding Vector Preparation Start")
+                    label_embeddings = self.prepare_embed_vector()
+                
+                if row['label'] == 0:
+                    label_name = "a medical image indicating Benign condition"
+                elif row['label'] == 1:
+                    label_name = "a medical image indicating Borderline condition"
+                elif row['label'] == 2:
+                    label_name = "a medical image indicating Malignant condition"
+                embedding_vector = label_embeddings[label_name]  # 사전 정의된 벡터 사용
+                label_list.append(embedding_vector)
+                self.scalar_label_list.append(row['label'])
+            else:  # 3개 클래스 그대로 사용
+                label_list.append(row['label'])
+                self.scalar_label_list.append(row['label'])
+
+        # 라벨 텐서 변환
+        if isinstance(label_list[0], int):
+            self.labels_tensor = torch.tensor(label_list, dtype=torch.long)
+        else:  # BERT Embedding 사용 시
+            self.labels_tensor = torch.tensor(np.array(label_list), dtype=torch.float32)
+        
+        # 스칼라 라벨 텐서 변환
+        self.scalar_labels_tensor = torch.tensor(self.scalar_label_list, dtype=torch.long)
+    def _import_library(self):
+        from lib.datasets.bert import bert_labeler
+        
+    def prepare_embed_vector(self):
+        """ Bert Embedding Model을 이용해 라벨 벡터를 미리 준비합니다. """
+        label_names  = ["Benign", "Borderline", "Malignant"]
+        label_names = ['a medical image indicating ' + label + ' condition' for label in label_names]
+        label_embeddings = {}
+        for label_name in label_names:
+            embedding_vector = self.bert_label.encode(text=label_name)
+            label_embeddings[label_name] = embedding_vector
+        return label_embeddings
 
     def __len__(self):
         return len(self.df)
@@ -169,8 +274,11 @@ class Custom_pcos_dataset(Dataset):
 
         # 라벨 텐서에서 idx 위치의 값을 꺼냄
         label = self.labels_tensor[idx]
+        # 라벨 정규화
+        label = label / label.norm()
+        
+        return image, mask, label, self.scalar_labels_tensor[idx]
 
-        return image, mask, label
 
 class JointTransform:
     """
@@ -348,7 +456,7 @@ def compute_mean_std(dataset, batch_size=32, num_workers=8):
     """
     dataset (torch.utils.data.Dataset): 이미 ToTensor()가 적용되는 Dataset
     """
-    loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False)
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False, pin_memory=True)
     
     # 채널별 누적을 위한 변수 (float 로 해야 함)
     channel_sum = torch.zeros(3)

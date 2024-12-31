@@ -11,7 +11,7 @@ def model_Loader(model_name: str, outlayer_num: int, type: str):
     """ 
     Model Loader : 정해진 모델 가지고 오는 로더
     만약 model이 없으면 에러 발생시키고, 있으면 모델명과 같은 파이썬 파일에서 모델 가지고 오기 
-    type : 모델의 타입 (예: 'binary', 'multi')
+    type : 모델의 타입 버전
     """
     if model_name in MODEL_LIST:
         # try:
@@ -30,7 +30,7 @@ def model_Loader(model_name: str, outlayer_num: int, type: str):
             raise ValueError(f"outlayer_num must be greater than 0.")
         
         print(f"Model '{model_name}' loaded.")
-        return model_fn(type)  # 'type'을 전달하여 모델 인스턴스 반환
+        return model_fn(type, outlayer_num)  # 'type'을 전달하여 모델 인스턴스 반환
             
         # except ImportError:
         #     raise ImportError(f"모듈 '{full_module_name}'을(를) 임포트할 수 없습니다.")

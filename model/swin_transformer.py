@@ -6,7 +6,7 @@ class binary_model(nn.Module):
     """
         ref : https://pytorch.org/vision/stable/models/swin_transformer.html 
     """
-    def __init__(self, type):
+    def __init__(self, type, num_classes=1):
         super(binary_model, self).__init__()
         if type =='t': # 256
             self.base_model = models.swin_v2_t(weights = models.Swin_V2_T_Weights.IMAGENET1K_V1)
@@ -15,13 +15,13 @@ class binary_model(nn.Module):
         elif type == 'default': # 256
             self.base_model = models.swin_v2_b(weights = models.Swin_V2_B_Weights.IMAGENET1K_V1)
         
-        self.base_model.head = nn.Linear(self.base_model.head.in_features, 1)
+        self.base_model.head = nn.Linear(self.base_model.head.in_features, num_classes)
         
     def forward(self, x):
         return self.base_model(x).view(-1)
     
 class multi_model(nn.Module):
-    def __init__(self, type):
+    def __init__(self, type, num_classes):
         super(multi_model, self).__init__()
         if type =='t': # 256
             self.base_model = models.swin_v2_t(weights = models.Swin_V2_T_Weights.IMAGENET1K_V1)
@@ -30,7 +30,7 @@ class multi_model(nn.Module):
         elif type == 'default': # 256
             self.base_model = models.swin_v2_b(weights = models.Swin_V2_B_Weights.IMAGENET1K_V1)
         
-        self.base_model.head = nn.Linear(self.base_model.head.in_features, 3)
+        self.base_model.head = nn.Linear(self.base_model.head.in_features, num_classes)
 
     def forward(self, x):
         return self.base_model(x)

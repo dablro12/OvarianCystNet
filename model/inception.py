@@ -28,7 +28,7 @@ class binary_model(nn.Module):
 
 
 class multi_model(nn.Module):
-    def __init__(self, type, classes=3):
+    def __init__(self, type, classes):
         super(multi_model, self).__init__()
         if type == 'default':
             self.base_model = models.inception_v3(weights=models.Inception_V3_Weights.IMAGENET1K_V1, aux_logits=False)

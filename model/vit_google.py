@@ -23,7 +23,7 @@ class multi_model(nn.Module):
     """ 
         Ref : https://pytorch.org/vision/stable/models/vision_transformer.html
     """
-    def __init__(self, type, num_classes=3):
+    def __init__(self, type, num_classes):
         super(multi_model, self).__init__()
         self.base_model = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224")
         self.base_model.classifier = nn.Linear(in_features=768, out_features=num_classes, bias=True)

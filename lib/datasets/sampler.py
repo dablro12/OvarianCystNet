@@ -1,10 +1,10 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 import numpy as np 
 import torch 
 # 2. 각 pid의 다수 레이블을 계산
 def multilabel_stratified_kfold(df: pd.DataFrame, n_splits: int, random_state: int = 627, shuffle: bool = True):
+    from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
     pid_label = df.groupby('pid')['label'].agg(lambda x: x.mode()[0]).reset_index()
     pid_label = pid_label.rename(columns={'label': 'pid_label'})
 

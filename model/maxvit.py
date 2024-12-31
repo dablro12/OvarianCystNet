@@ -21,7 +21,7 @@ class multi_model(nn.Module):
         Ref : https://pytorch.org/vision/stable/models/generated/torchvision.models.maxvit_t.html#torchvision.models.maxvit_t
     """
     
-    def __init__(self, type, num_classes = 3):
+    def __init__(self, type, num_classes):
         super(multi_model, self).__init__()
         if type == 'default': # Resize : 224
             self.base_model = models.maxvit_t(weights = models.MaxVit_T_Weights.IMAGENET1K_V1)

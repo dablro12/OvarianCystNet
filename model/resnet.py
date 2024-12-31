@@ -5,7 +5,7 @@ class binary_model(nn.Module):
     """ 
         Ref : https://pytorch.org/vision/stable/models/generated/torchvision.models.resnet18.html#torchvision.models.resnet18
     """
-    def __init__(self, type, num_classes =1 ):
+    def __init__(self, type, num_classes):
         super(binary_model, self).__init__()
         if type == 'resnet18': # size : 256
             self.base_model = models.resnet18(weights = models.ResNet18_Weights)
@@ -15,8 +15,10 @@ class binary_model(nn.Module):
             self.base_model.fc = nn.Linear(512, num_classes)
         elif type == 'resnet50': # 232
             self.base_model = models.resnet50(weights = models.ResNet50_Weights)
+            self.base_model.fc = nn.Linear(2048, num_classes)
         elif type == 'resnet101': # 224
             self.base_model = models.resnet101(weights = models.ResNet101_Weights)
+            self.base_model.fc = nn.Linear(2048, num_classes)
         elif type == 'resnet152': # 224
             self.base_model = models.resnet152(weights = models.ResNet152_Weights)
             self.base_model.fc = nn.Linear(2048, num_classes)
@@ -29,13 +31,11 @@ class binary_model(nn.Module):
                 self.base_model.conv1.weight[:, 3:, :, :].zero_()  # 새 채널은 0으로 초기화
             self.base_model.fc = nn.Linear(512, num_classes)
             
-        # vgg16 마지막 분류기 부분을 바이너리 분류에 맞게 변경
-        
     def forward(self, x):
         return self.base_model(x).view(-1)
 
 class multi_model(nn.Module):
-    def __init__(self, type, num_classes = 3):
+    def __init__(self, type, num_classes):
         super(multi_model, self).__init__()
         if type == 'resnet18': # size : 256
             self.base_model = models.resnet18(weights = models.ResNet18_Weights)
@@ -45,8 +45,10 @@ class multi_model(nn.Module):
             self.base_model.fc = nn.Linear(512, num_classes)
         elif type == 'resnet50': # 232
             self.base_model = models.resnet50(weights = models.ResNet50_Weights)
+            self.base_model.fc = nn.Linear(2048, num_classes)
         elif type == 'resnet101': # 224 
             self.base_model = models.resnet101(weights = models.ResNet101_Weights)
+            self.base_model.fc = nn.Linear(2048, num_classes)
         elif type == 'resnet152': # 224 
             self.base_model = models.resnet152(weights = models.ResNet152_Weights)
             self.base_model.fc = nn.Linear(2048, num_classes)
@@ -58,7 +60,6 @@ class multi_model(nn.Module):
                 self.base_model.conv1.weight[:, :3, :, :] = self.base_model.conv1.weight[:, :3, :, :]  # 기존 RGB 가중치 복사
                 self.base_model.conv1.weight[:, 3:, :, :].zero_()  # 새 채널은 0으로 초기화
             self.base_model.fc = nn.Linear(512, num_classes)
-            # vgg16 마지막 분류기 부분을 바이너리 분류에 맞게 변경
         
     def forward(self, x):
         return self.base_model(x)

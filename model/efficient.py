@@ -6,7 +6,7 @@ class binary_model(nn.Module):
         Ref : https://pytorch.org/vision/stable/models/generated/torchvision.models.efficientnet_v2_l.html#torchvision.models.efficientnet_v2_l
     """
     
-    def __init__(self, type):
+    def __init__(self, type, num_classes= 1):
         super(binary_model, self).__init__()
         if type == 's': # Resize : 384
             self.base_model = models.efficientnet_v2_s(weights = models.EfficientNet_V2_S_Weights)
@@ -14,7 +14,7 @@ class binary_model(nn.Module):
             self.base_model = models.efficientnet_v2_m(weights = models.EfficientNet_V2_M_Weights)
         elif type == 'l': # Resize : 480
             self.base_model = models.efficientnet_v2_l(weights = models.EfficientNet_V2_L_Weights)
-        self.base_model.classifier[-1] = nn.Linear(1280, 1)
+        self.base_model.classifier[-1] = nn.Linear(1280, num_classes)
             
         
     def forward(self, x):
@@ -26,7 +26,7 @@ class multi_model(nn.Module):
         Ref : https://pytorch.org/vision/stable/models/generated/torchvision.models.efficientnet_v2_l.html#torchvision.models.efficientnet_v2_l
     """
     
-    def __init__(self, type):
+    def __init__(self, type, num_classes):
         super(multi_model, self).__init__()
         if type == 's': # Resize : 384
             self.base_model = models.efficientnet_v2_s(weights = models.EfficientNet_V2_S_Weights)
@@ -35,7 +35,7 @@ class multi_model(nn.Module):
         elif type == 'l': # Resize : 480
             self.base_model = models.efficientnet_v2_l(weights = models.EfficientNet_V2_L_Weights)
             
-        self.base_model.classifier[-1] = nn.Linear(1280, 3)
+        self.base_model.classifier[-1] = nn.Linear(1280, num_classes)
         
     def forward(self, x):
         return self.base_model(x)
