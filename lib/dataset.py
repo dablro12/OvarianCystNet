@@ -333,6 +333,10 @@ class JointTransform:
         
         # ---------- (2) Horizontal flip ----------
         if self.horizontal_flip:
+            # ----------- Torch Random Crop ----------
+            image = transforms.RandomResizedCrop(size = (224, 224), scale = (0.5, 2.5))(image)
+            mask = transforms.RandomResizedCrop(size = (224, 224), scale = (0.5, 2.5))(mask)
+
             image = transforms.functional.hflip(image)
             mask = transforms.functional.hflip(mask)
 
@@ -349,8 +353,8 @@ class JointTransform:
 
         # ---------- (5) Random Affine ----------
         if self.random_affine:
-            image = transforms.RandomAffine(scale = (0.8, 1.2), degrees =0, shear = 0, translate= (0, 0.2))(image)
-            mask = transforms.RandomAffine(scale = (0.8, 1.2), degrees =0, shear = 0, translate= (0, 0.2))(mask)
+            image = transforms.RandomAffine(scale = (0.8, 1.2), degrees =0, shear = 0, translate= (0.1, 0.1))(image)
+            mask = transforms.RandomAffine(scale = (0.8, 1.2), degrees =0, shear = 0, translate= (0.1, 0.1))(mask)
         
         # ---------- (7) Random Brightness (Albumentations) ----------
         if self.random_brightness:
@@ -361,7 +365,7 @@ class JointTransform:
                 p = 0.5,
             )['image'] # albumentation은 np.array로 받아야함
             image = Image.fromarray(image)
-
+        
         # ---------- (8) ToTensor ----------
         image = transforms.ToTensor()(image)
         mask = transforms.ToTensor()(mask)

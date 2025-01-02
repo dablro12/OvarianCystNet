@@ -3,7 +3,7 @@ import argparse
 
 # multi_exp_classification 모듈 import
 from script.exp_train import binary_exp_classification
-# from script.exp_train import multi_exp_classification
+from script.exp_train import multi_exp_classification
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", required= True, type=str, help="모델 이름")
@@ -20,8 +20,8 @@ def main():
     args = parse_args()
     
     # 인스턴스 생성
-    # trainer = multi_exp_classification(args=args)
-    trainer = binary_exp_classification(args=args)
+    trainer = multi_exp_classification(args=args)
+    # trainer = binary_exp_classification(args=args)
     # 필요한 속성 주입
     trainer.run_name = args.run_name  # wandb run 이름
     trainer.wandb_use = args.wandb_use
