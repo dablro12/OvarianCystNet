@@ -8,8 +8,8 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --save_dir="/mnt/hdd/octc/PCOS_experiment/binary/checkpoint" \
     --epochs=50 \
     --wandb_use=True \
-    --patience=20 \
-    --run_name="resizecropwithaug-lr0.000002" \
+    --patience=10 \
+    --run_name="auggancombinedx2-lr0.0001" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -18,8 +18,8 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --save_dir="/mnt/hdd/octc/PCOS_experiment/binary/checkpoint" \
     --epochs=50 \
     --wandb_use=True \
-    --patience=20 \
-    --run_name="resizecropwithaug-lr0.000002" \
+    --patience=10 \
+    --run_name="auggancombinedx2-lr0.0001" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -28,8 +28,8 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --save_dir="/mnt/hdd/octc/PCOS_experiment/binary/checkpoint" \
     --epochs=50 \
     --wandb_use=True \
-    --patience=20 \
-    --run_name="resizecropwithaug-lr0.000002" \
+    --patience=10 \
+    --run_name="auggancombinedx2-lr0.0001" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -38,8 +38,8 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --save_dir="/mnt/hdd/octc/PCOS_experiment/binary/checkpoint" \
     --epochs=50 \
     --wandb_use=True \
-    --patience=20 \
-    --run_name="resizecropwithaug-lr0.000002" \
+    --patience=10 \
+    --run_name="auggancombinedx2-lr0.0001" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -48,8 +48,8 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --save_dir="/mnt/hdd/octc/PCOS_experiment/binary/checkpoint" \
     --epochs=50 \
     --wandb_use=True \
-    --patience=20 \
-    --run_name="resizecropwithaug-lr0.000002" \
+    --patience=10 \
+    --run_name="auggancombinedx2-lr0.0001" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -58,6 +58,6 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --save_dir="/mnt/hdd/octc/PCOS_experiment/binary/checkpoint" \
     --epochs=50 \
     --wandb_use=True \
-    --patience=20 \
-    --run_name="resizecropwithaug-lr0.000002" \
+    --patience=10 \
+    --run_name="auggancombinedx2-lr0.0001" \
 

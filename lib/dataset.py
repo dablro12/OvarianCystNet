@@ -169,6 +169,9 @@ class Custom_pcos_dataset(Dataset):
         # 라벨 텐서에서 idx 위치의 값을 꺼냄
         label = self.labels_tensor[idx]
         return image, mask, label
+
+
+
 class Custom_pcos_dataset_BERT(Dataset):
     def __init__(self, 
                  df, 
@@ -303,8 +306,8 @@ class JointTransform:
         rotation=False,
         random_brightness = False,
         random_affine = False,
-        normalize_mean = [0.1663, 0.1663, 0.1663],
-        normalize_std = [0.2037, 0.2037, 0.2037]
+        normalize_mean = None,
+        normalize_std = None
         ):
         self.resize = resize
         self.horizontal_flip = horizontal_flip
@@ -364,8 +367,8 @@ class JointTransform:
         mask = transforms.ToTensor()(mask)
 
         # ---------- (9) Normalize ----------
-        if self.normalize_mean is not None and self.normalize_std is not None:
-            image = transforms.Normalize(mean = self.normalize_mean, std = self.normalize_std)(image)
+        # if self.normalize_mean is not None and self.normalize_std is not None:
+        #     image = transforms.Normalize(mean = self.normalize_mean, std = self.normalize_std)(image)
         return image, mask
 
 

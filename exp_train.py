@@ -2,8 +2,8 @@
 import argparse
 
 # multi_exp_classification 모듈 import
-from script.exp_train import multi_exp_classification, binary_exp_classification
-
+from script.exp_train import binary_exp_classification
+# from script.exp_train import multi_exp_classification
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", required= True, type=str, help="모델 이름")

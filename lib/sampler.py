@@ -90,93 +90,79 @@ def class_weight_getter(fold):
     pos_weight_value = n_neg / n_pos
     pos_weight = torch.tensor([pos_weight_value], dtype=torch.float32).to('cuda')
     return pos_weight
+
+
+
+
 #%% BalancedBatchSampler
-class BalancedBatchSampler(torch.utils.data.sampler.Sampler):
-    def __init__(self, dataset, labels=None):
+class BalancedBatchSampler(torch.utils.data.Sampler):
+    def __init__(self, dataset, labels=None, batch_size=4):
         self.labels = labels
         self.dataset = dict()
         self.balanced_max = 0
-        # Save all the indices for all the classes
-        for idx in range(0, len(dataset)):
+        self.batch_size = batch_size
+
+        # 클래스별 인덱스 저장
+        for idx in range(len(dataset)):
             label = self._get_label(dataset, idx)
             if label not in self.dataset:
-                self.dataset[label] = list()
+                self.dataset[label] = []
             self.dataset[label].append(idx)
             self.balanced_max = max(len(self.dataset[label]), self.balanced_max)
-        
-        # Oversample the classes with fewer elements than the max
+
+        # 클래스별 인덱스 오버샘플링
         for label in self.dataset:
             while len(self.dataset[label]) < self.balanced_max:
                 self.dataset[label].append(random.choice(self.dataset[label]))
+
         self.keys = list(self.dataset.keys())
-        self.currentkey = 0
-        self.indices = [-1]*len(self.keys)
+        self.num_classes = len(self.keys)
+        if self.batch_size % self.num_classes != 0:
+            raise ValueError("Batch size must be divisible by number of classes")
+        
+        self.samples_per_class = self.batch_size // self.num_classes
 
     def __iter__(self):
-        while self.indices[self.currentkey] < self.balanced_max - 1:
-            self.indices[self.currentkey] += 1
-            yield self.dataset[self.keys[self.currentkey]][self.indices[self.currentkey]]
-            self.currentkey = (self.currentkey + 1) % len(self.keys)
-        self.indices = [-1]*len(self.keys)
-    
-    def _get_label(self, dataset, idx, labels=None):
+        # 각 클래스의 인덱스 섞기
+        shuffled_dataset = {label: random.sample(indices, len(indices)) for label, indices in self.dataset.items()}
+
+        # 총 배치 수 계산
+        num_batches = self.balanced_max // self.samples_per_class
+
+        # 모든 배치를 저장할 리스트
+        all_batches = []
+
+        for i in range(num_batches):
+            batch = []
+            for label in self.keys:
+                start = i * self.samples_per_class
+                end = (i + 1) * self.samples_per_class
+                batch.extend(shuffled_dataset[label][start:end])
+            # 배치 내 샘플 순서 섞기
+            random.shuffle(batch)
+            all_batches.append(batch)
+
+        # 전체 배치 순서 섞기
+        random.shuffle(all_batches)
+
+        # 인덱스를 순차적으로 yield
+        for batch in all_batches:
+            for idx in batch:
+                yield idx
+
+    def _get_label(self, dataset, idx):
         if self.labels is not None:
             return self.labels[idx].item()
         else:
-            # Trying guessing
+            # 기본 라벨 추출 방식
             dataset_type = type(dataset)
-            if is_torchvision_installed and dataset_type is torchvision.datasets.MNIST:
-                return dataset.train_labels[idx].item()
-            elif is_torchvision_installed and dataset_type is torchvision.datasets.ImageFolder:
-                return dataset.imgs[idx][1]
-            else:
-                raise Exception("You should pass the tensor of labels to the constructor as second argument")
+            if 'torchvision' in dataset_type.__module__:
+                if isinstance(dataset, torch.utils.data.Dataset):
+                    if hasattr(dataset, 'targets'):
+                        return dataset.targets[idx]
+                    elif hasattr(dataset, 'imgs'):
+                        return dataset.imgs[idx][1]
+            raise Exception("You should pass the tensor of labels to the constructor as second argument")
 
     def __len__(self):
-        return self.balanced_max * len(self.keys)
-
-
-# class BalancedBatchSampler(torch.utils.data.sampler.Sampler):
-#     def __init__(self, dataset, labels=None):
-#         self.labels = labels
-#         self.dataset = dict()
-#         self.balanced_max = 0
-#         # Save all the indices for all the classes
-#         for idx in range(0, len(dataset)):
-#             label = self._get_label(dataset, idx)
-#             if label not in self.dataset:
-#                 self.dataset[label] = list()
-#             self.dataset[label].append(idx)
-#             self.balanced_max = len(self.dataset[label]) \
-#                 if len(self.dataset[label]) > self.balanced_max else self.balanced_max
-        
-#         # Oversample the classes with fewer elements than the max
-#         for label in self.dataset:
-#             while len(self.dataset[label]) < self.balanced_max:
-#                 self.dataset[label].append(random.choice(self.dataset[label]))
-#         self.keys = list(self.dataset.keys())
-#         self.currentkey = 0
-#         self.indices = [-1]*len(self.keys)
-
-#     def __iter__(self):
-#         while self.indices[self.currentkey] < self.balanced_max - 1:
-#             self.indices[self.currentkey] += 1
-#             yield self.dataset[self.keys[self.currentkey]][self.indices[self.currentkey]]
-#             self.currentkey = (self.currentkey + 1) % len(self.keys)
-#         self.indices = [-1]*len(self.keys)
-    
-#     def _get_label(self, dataset, idx, labels = None):
-#         if self.labels is not None:
-#             return self.labels[idx].item()
-#         else:
-#             # Trying guessing
-#             dataset_type = type(dataset)
-#             if is_torchvision_installed and dataset_type is torchvision.datasets.MNIST:
-#                 return dataset.train_labels[idx].item()
-#             elif is_torchvision_installed and dataset_type is torchvision.datasets.ImageFolder:
-#                 return dataset.imgs[idx][1]
-#             else:
-#                 raise Exception("You should pass the tensor of labels to the constructor as second argument")
-
-#     def __len__(self):
-#         return self.balanced_max*len(self.keys)
+        return self.balanced_max * self.num_classes
