@@ -20,7 +20,7 @@ from torchsampler import ImbalancedDatasetSampler
 import wandb
 from lib.schedulers import warmup_lr_lambda, linear_lr_lambda
 from lib.seed import set_seed
-from lib.loss import FocalLoss, smooth_labels
+from lib.loss import FocalLoss, smooth_labels, PolyLoss, PolyBCELoss
 from lib.dataset import Custom_df_dataset, JointTransform, Custom_pcos_dataset, get_class_weights, compute_mean_std
 from lib.datasets.sampler import class_weight_getter
 from lib.datasets.ds_tools import label_counter
@@ -139,9 +139,9 @@ class multi_exp_classification:
         
         optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.000001)
         
-        criterion = nn.CrossEntropyLoss(weight = self.weight_tensor, label_smoothing= 0.1).to(self.device)  # 손실함수
+        # criterion = nn.CrossEntropyLoss(weight = self.weight_tensor, label_smoothing= 0.1).to(self.device)  # 손실함수
         # criterion = FocalLoss(alpha=self.weight_tensor, gamma=2, reduction='mean').to(self.device)  # Focal Loss
-
+        criterion = PolyLoss(softmax = True, ce_weight= self.weight_tensor, reduction = 'mean', epsilon= 1.0).to(self.device)
         # scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: linear_lr_lambda(epoch, num_epochs = 100, max_lr = 0.00001, min_lr = 0.0000001))
         # scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda epoch: 0.95 ** epoch)
         # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
@@ -471,11 +471,12 @@ class binary_exp_classification:
         # criterion = nn.BCEWithLogitsLoss().to(self.device)
         binary_pos_weight = self.weight_tensor[1] / self.weight_tensor[0] # pos_weight = 음성 클래스 수 / 양성 클래스 수
         # print(f"[양성 클래스 가중치] {binary_pos_weight}")
-        criterion = nn.BCEWithLogitsLoss(pos_weight = binary_pos_weight).to(self.device)
+        # criterion = nn.BCEWithLogitsLoss(pos_weight = binary_pos_weight).to(self.device)
         # criterion = nn.BCEWithLogitsLoss().to(self.device)
+        criterion = PolyBCELoss(reduction= 'mean', epsilon= 1.0).to(self.device)
         # 학습률 스케줄러 설정
         # scheduler = None
-        scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda step: lr_lambda(step))
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda step: linear_lr_lambda(step))
         print("\033[41mFinished Model Initialization\033[0m")
         return model, optimizer, criterion, scheduler
     

@@ -69,7 +69,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=100 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="auggancombinedx2v2-cyclicLR" \
+    --run_name="auggancombinedx2v2-PolyLoss" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -79,7 +79,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=100 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="auggancombinedx2v2-cyclicLR" \
+    --run_name="auggancombinedx2v2-PolyLoss" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -89,7 +89,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=100 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="auggancombinedx2v2-cyclicLR" \
+    --run_name="auggancombinedx2v2-PolyLoss" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -99,7 +99,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=100 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="auggancombinedx2v2-cyclicLR" \
+    --run_name="auggancombinedx2v2-PolyLoss" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -109,7 +109,7 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=100 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="auggancombinedx2v2-cyclicLR" \
+    --run_name="auggancombinedx2v2-PolyLoss" \
 
 
 /home/eiden/miniconda3/envs/cv/bin/python exp_train.py \
@@ -119,5 +119,5 @@ export NO_ALBUMENTATIONS_UPDATE=1
     --epochs=100 \
     --wandb_use=True \
     --patience=20 \
-    --run_name="auggancombinedx2v2-cyclicLR" \
+    --run_name="auggancombinedx2v2-PolyLoss" \
 
