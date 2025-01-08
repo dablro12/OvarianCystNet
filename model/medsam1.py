@@ -18,10 +18,11 @@ class MLPHead(nn.Module):
         x = self.fc2(x)
         return x
 
-class binary_model(nn.Module):
+class model_setup(nn.Module):
     """ input size = 1024,1024 """
-    def __init__(self, type, model_ckpt = '/home/eiden/eiden/PCOS-roi-classification/checkpoints/MedSAM1/medsam_vit_b.pth'):
-        super(binary_model, self).__init__()
+    def __init__(self, type, num_classes, model_ckpt = '/home/eiden/eiden/PCOS-roi-classification/checkpoints/MedSAM1/medsam_vit_b.pth'):
+        super(model_setup, self).__init__()
+        self.num_classes = num_classes
         medsam_backbone = sam_model_registry[type](checkpoint=model_ckpt)
         self.medsam_encoder = medsam_backbone.image_encoder
 
@@ -41,7 +42,7 @@ class binary_model(nn.Module):
             nn.Linear(256, 128),  # Encoder 채널 수 256 → 중간 차원 128
             nn.ReLU(),
             nn.Dropout(0.5),  # 과적합 방지
-            nn.Linear(128, 1)  # 최종 출력
+            nn.Linear(128, num_classes)  # 최종 출력
         )
         
     def forward(self, x):
@@ -59,53 +60,11 @@ class binary_model(nn.Module):
         
         # Fully Connected Layers
         x = self.classifier(x)  # [Batch, n_classes]
-        
-        return x.view(-1)
+        if self.num_classes == 1:
+            return x.view(-1)
+        else:
+            return x
 
-class multi_model(nn.Module):
-    """ input size = 1024,1024 """
-    def __init__(self, type, model_ckpt = '/home/eiden/eiden/PCOS-roi-classification/checkpoints/MedSAM1/medsam_vit_b.pth'):
-        super(multi_model, self).__init__()
-        medsam_backbone = sam_model_registry[type](checkpoint=model_ckpt)
-        self.medsam_encoder = medsam_backbone.image_encoder
-
-        # Freeze encoder
-        for param in self.medsam_encoder.parameters():
-            param.requires_grad = True
-        print(f"[MEDSAM1] Encoder is frozen")
-
-        # Spatial Attention
-        self.spatial_attention = nn.Sequential(
-            nn.Conv2d(256, 1, kernel_size=1, stride=1, padding=0),  # 채널 축소 (256 → 1)
-            nn.Sigmoid()  # [0, 1]로 정규화
-        )
-        
-        # Fully Connected Layers for Classification
-        self.classifier = nn.Sequential(
-            nn.Linear(256, 128),  # Encoder 채널 수 256 → 중간 차원 128
-            nn.ReLU(),
-            nn.Dropout(0.5),  # 과적합 방지
-            nn.Linear(128, 3)  # 최종 출력
-        )
-        
-    def forward(self, x):
-        # Encoder를 통해 특징 추출
-        x = self.medsam_encoder(x)  # [Batch, 256, 64, 64]
-        
-        # Spatial Attention
-        attention = self.spatial_attention(x)  # [Batch, 1, 64, 64]
-        
-        # Element-wise 곱
-        x = x * attention  # [Batch, 256, 64, 64]
-        
-        # Global Average Pooling
-        x = torch.sum(x, dim=[2, 3])  # [Batch, 256]
-        
-        # Fully Connected Layers
-        x = self.classifier(x)  # [Batch, n_classes]
-        return x
-        
-    
 # # Image Encoder에 MLP Head를 추가하는 클래스 정의
 # class ImageEncoderWithMLPHead(nn.Module):
 #     def __init__(self, image_encoder, hidden_dim, out_dim):

@@ -14,7 +14,7 @@ import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from ptflops import get_model_complexity_info
+# from ptflops import get_model_complexity_info
 from torchsampler import ImbalancedDatasetSampler
 
 import wandb
@@ -186,7 +186,6 @@ class multi_exp_classification:
                 labels = labels.to(self.device).float()
                 outputs = self.model(inputs)
                 # 다중 분류
-                _, predicted = torch.max(outputs.data, 1)
                 labels = labels.long()
 
                 loss = self.criterion(outputs, labels)
@@ -252,17 +251,17 @@ class multi_exp_classification:
             all_probs = []
             
             for inputs, _, labels in self.train_loader:
-                self.optimizer.zero_grad()
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
 
                 outputs = self.model(inputs)
-                _, predicted = torch.max(outputs.data, 1)
                 labels = labels.long()
                     
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
+                self.optimizer.zero_grad()
+                
                 total_loss += loss.item()
 
                 all_labels.extend(labels.detach().cpu().numpy())
@@ -330,6 +329,9 @@ class multi_exp_classification:
         
     def fit(self, epochs: int):
         set_seed(42)
+        torch.manual_seed(42)
+        torch.cuda.manual_seed(42)
+        
         self.best_val_loss = float('inf')
         self.early_stop_counter = 0
         self.best_model_path = None
@@ -400,23 +402,27 @@ class binary_exp_classification:
         # print(f"mean: {np.round(mean.tolist(), 3)}, std: {np.round(std.tolist(),3)}")
         train_transform = JointTransform(
             # #%% Aug
-            resize =(224,224),
+            resize =(284,284),
+            # resize =(252,252),
             # center_crop=(224, 224),
+            center_crop=(252, 252),
             horizontal_flip=True,   # 데이터 증강: x2
             vertical_flip=True,     # 데이터 증강: x2
             random_affine=True,
             rotation=10,            # 데이터 증강: x8
-            random_brightness=True,
+            # random_brightness=True,
         )
         
         train_dataset = Custom_pcos_dataset(
-            df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/augcombined_train_split.csv"),
+            # df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/augcombined_train_split.csv"),
+            df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/train_split.csv"),
             root_dir="/mnt/hdd/octc/PCOS_Dataset",
             joint_transform= train_transform,
             torch_transform= False,
             mask_use=False,
             class_num=1,  # 3에서 1로 변경
             data_type="Dataset-combined-AUGGAN",
+            # data_type="Dataset",
         )
         
         val_dataset = Custom_pcos_dataset(
@@ -430,7 +436,7 @@ class binary_exp_classification:
             ),
             torch_transform= False,
             mask_use=False,
-            class_num=1,  # 3에서 1로 변경
+            class_num=1,  # 3에서 1로 변경 
             data_type="Dataset"
         )
         
@@ -444,7 +450,7 @@ class binary_exp_classification:
         )
         val_loader = DataLoader(
             val_dataset,
-            batch_size=8,
+            batch_size=24,
             shuffle=False,
             num_workers=16,
             pin_memory=True if self.device.type == 'cuda' else False,
@@ -466,7 +472,7 @@ class binary_exp_classification:
         model = model_Loader(model_name=self.model_name, outlayer_num=1, type=self.model_type)
         model.to(self.device)  # 모델을 디바이스로 이동
         
-        optimizer = optim.AdamW(model.parameters(), lr=0.0001, weight_decay=1e-4)
+        optimizer = optim.AdamW(model.parameters(), lr=self.args.lr, weight_decay=1e-4)
         
         # criterion = nn.BCEWithLogitsLoss().to(self.device)
         binary_pos_weight = self.weight_tensor[1] / self.weight_tensor[0] # pos_weight = 음성 클래스 수 / 양성 클래스 수
@@ -476,15 +482,19 @@ class binary_exp_classification:
         criterion = PolyBCELoss(reduction= 'mean', epsilon= 1.0).to(self.device)
         # 학습률 스케줄러 설정
         # scheduler = None
-        scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda step: linear_lr_lambda(step))
+        # scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=self.args.lr, max_lr=self.args.lr*5, step_size_up=5, step_size_down=5, mode='triangular2')
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer=optimizer, lr_lambda=lambda step: linear_lr_lambda(step, num_epochs=100, max_lr=self.args.lr * 5, min_lr=self.args.lr / 5))
         print("\033[41mFinished Model Initialization\033[0m")
         return model, optimizer, criterion, scheduler
     
-    def save_best_model(self, epoch: int, val_loss: float):
+    def save_best_model(self, epoch: int, val_loss: float, last_epoch = False):
         try:
-            if self.best_model_path and os.path.exists(self.best_model_path):
-                os.remove(self.best_model_path)
-                print(f"이전 최적 모델을 삭제했습니다: {self.best_model_path}")
+            if last_epoch:
+                pass
+            else:
+                if self.best_model_path and os.path.exists(self.best_model_path):
+                    os.remove(self.best_model_path)
+                    print(f"이전 최적 모델을 삭제했습니다: {self.best_model_path}")
 
             # 저장 디렉토리 생성
             save_dir = os.path.join(self.save_dir, self.model_name + '_' + self.run_name)
@@ -501,7 +511,7 @@ class binary_exp_classification:
             self.best_model_path = save_path
         except Exception as e:
             print(f"에포크 {epoch}에서 모델 저장 중 오류 발생: {e}")
-            
+        
     def validate(self, epoch: int) -> float:
         self.model.eval()
         total_loss = 0.0
@@ -515,8 +525,6 @@ class binary_exp_classification:
                 labels = labels.to(self.device).float()
 
                 outputs = self.model(inputs)
-                # 이진 분류: 시그모이드 활성화 적용하여 확률 계산
-                probs = torch.sigmoid(outputs)
                 
                 # smoothed_labels = smooth_labels(labels, epsilon=0.1)
                 # loss = self.criterion(outputs, smoothed_labels)
@@ -524,10 +532,9 @@ class binary_exp_classification:
                 total_loss += loss.item()
 
                 all_labels.extend(labels.detach().cpu().numpy())
-                all_probs.extend(probs.detach().cpu().numpy())
+                all_probs.extend(torch.sigmoid(outputs).detach().cpu().numpy())
 
         valid_loss = total_loss / len(self.val_loader)
-
         if not np.isfinite(valid_loss):
             print(f"경고: 에포크 {epoch}에서 유효하지 않은 평균 손실이 감지되었습니다. 손실을 무한대로 설정합니다.")
             valid_loss = float('inf')
@@ -573,7 +580,6 @@ class binary_exp_classification:
             all_probs = []
             
             for inputs, _, labels in self.train_loader:
-                self.optimizer.zero_grad()
                 inputs = inputs.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True).float()
 
@@ -583,6 +589,7 @@ class binary_exp_classification:
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
+                self.optimizer.zero_grad()
                 total_loss += loss.item()
 
                 all_labels.extend(labels.detach().cpu().numpy())
@@ -621,9 +628,7 @@ class binary_exp_classification:
             val_loss = self.validate(epoch=epoch)
             final_val_loss = val_loss
 
-            # # 학습률 스케줄러 단계
-            # The above code is attempting to access the `scheduler` attribute of the `self` object in
-            # a Python class.
+            # 학습률 스케줄러 단계
             self.scheduler.step()
 
             # 조기 종료 로직
@@ -636,7 +641,7 @@ class binary_exp_classification:
 
             if self.early_stop_counter >= self.patience:
                 print("Early stopping triggered")
-                self.save_best_model(epoch, val_loss)
+                self.save_best_model(epoch, val_loss, last_epoch = True)
                 break
 
         return final_val_loss, epoch
@@ -645,6 +650,9 @@ class binary_exp_classification:
             
     def fit(self, epochs: int):
         set_seed(42)
+        torch.manual_seed(42)
+        torch.cuda.manual_seed(42)
+        
         self.best_val_loss = float('inf')
         self.early_stop_counter = 0
         self.best_model_path = None

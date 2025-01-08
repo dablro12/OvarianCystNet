@@ -8,6 +8,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", required= True, type=str, help="모델 이름")
     parser.add_argument("--model_type", required= True, type=str, help="모델 타입")
+    parser.add_argument("--lr", required= True, type=float, help="학습률")
     parser.add_argument("--save_dir", required= True, type=str, help="모델 저장 디렉토리")
     parser.add_argument("--epochs", required= True, type=int, default=100, help="학습 에폭 수")
     parser.add_argument("--patience", required= True, type=int, default=20, help="Early stopping patience")
@@ -20,8 +21,8 @@ def main():
     args = parse_args()
     
     # 인스턴스 생성
-    trainer = multi_exp_classification(args=args)
-    # trainer = binary_exp_classification(args=args)
+    # trainer = multi_exp_classification(args=args)
+    trainer = binary_exp_classification(args=args)
     # 필요한 속성 주입
     trainer.run_name = args.run_name  # wandb run 이름
     trainer.wandb_use = args.wandb_use
