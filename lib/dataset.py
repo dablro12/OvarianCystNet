@@ -303,7 +303,7 @@ class JointTransform:
         center_crop = None,
         horizontal_flip=False,
         vertical_flip=False,
-        rotation=False,
+        rotation=0,
         random_brightness = False,
         random_affine = False,
         normalize_mean = None,

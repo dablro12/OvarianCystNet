@@ -134,7 +134,7 @@ class multi_exp_classification:
         return train_loader, val_loader
         
     def _get_model_loader(self):
-        model = model_Loader(model_name=self.model_name, outlayer_num=3, type=self.model_type)
+        model = model_Loader(model_name=self.model_name, num_classes=3, type=self.model_type)
         model.to(self.device)  # 모델을 디바이스로 이동
         
         optimizer = optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=0.000001)
@@ -367,11 +367,12 @@ class binary_exp_classification:
         args=None, 
     ):
         self.args = args
+        self.df_path = args.df_path
+        self.dataset_name = args.dataset_name
         self.model_name = args.model_name
         self.model_type = args.model_type
         self.save_dir = args.save_dir
         self.patience = args.patience
-        
         # 아래 속성들은 main에서 할당해주는 방식 (trainer.run_name 등)이거나
         # 직접 None으로 초기화하고 뒤에서 필요한 경우 할당
         self.run_name = args.run_name if args else None
@@ -402,26 +403,26 @@ class binary_exp_classification:
         # print(f"mean: {np.round(mean.tolist(), 3)}, std: {np.round(std.tolist(),3)}")
         train_transform = JointTransform(
             # #%% Aug
-            resize =(284,284),
-            # resize =(252,252),
+            # resize =(284,284),
+            resize =(252,252),
             # center_crop=(224, 224),
-            center_crop=(252, 252),
+            # center_crop=(252, 252),
             horizontal_flip=True,   # 데이터 증강: x2
             vertical_flip=True,     # 데이터 증강: x2
             random_affine=True,
-            rotation=10,            # 데이터 증강: x8
+            rotation=30,            # 데이터 증강: x8
             # random_brightness=True,
         )
         
         train_dataset = Custom_pcos_dataset(
             # df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/augcombined_train_split.csv"),
-            df=pd.read_csv("/mnt/hdd/octc/PCOS_Dataset/train_split.csv"),
+            df=pd.read_csv(self.df_path),
             root_dir="/mnt/hdd/octc/PCOS_Dataset",
             joint_transform= train_transform,
             torch_transform= False,
             mask_use=False,
             class_num=1,  # 3에서 1로 변경
-            data_type="Dataset-combined-AUGGAN",
+            data_type=self.dataset_name,
             # data_type="Dataset",
         )
         
@@ -442,7 +443,7 @@ class binary_exp_classification:
         
         train_loader = DataLoader(
             train_dataset,
-            batch_size=40,
+            batch_size=64,
             # shuffle = True,
             sampler=BalancedBatchSampler(dataset = train_dataset, labels=train_dataset.labels_tensor), 
             num_workers=16,
@@ -468,8 +469,8 @@ class binary_exp_classification:
         return train_loader, val_loader
         
     def _get_model_loader(self):
-        # 이진 분류에 맞게 출력 레이어 조정 (outlayer_num=1)
-        model = model_Loader(model_name=self.model_name, outlayer_num=1, type=self.model_type)
+        # 이진 분류에 맞게 출력 레이어 조정 (num_classes=1)
+        model = model_Loader(model_name=self.model_name, num_classes=1, type=self.model_type)
         model.to(self.device)  # 모델을 디바이스로 이동
         
         optimizer = optim.AdamW(model.parameters(), lr=self.args.lr, weight_decay=1e-4)

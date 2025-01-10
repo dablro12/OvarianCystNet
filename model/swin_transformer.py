@@ -14,8 +14,8 @@ class model_setup(nn.Module):
         else:
             if type =='t': # 256
                 self.base_model = models.swin_v2_t(weights = models.Swin_V2_T_Weights.IMAGENET1K_V1)
-            elif type == 's': # 2224
-                self.base_model = timm.create_model('swin_small_patch4_window7_224.ms_in22k', pretrained=True,  num_classes=1)
+            elif type == 's': # 224
+                self.base_model = timm.create_model('swin_small_patch4_window7_224.ms_in22k', pretrained=True,  num_classes=num_classes)
             elif type == 'default': # 256
                 self.base_model = models.swin_v2_b(weights = models.Swin_V2_B_Weights.IMAGENET1K_V1)
             

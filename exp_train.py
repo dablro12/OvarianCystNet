@@ -6,6 +6,8 @@ from script.exp_train import binary_exp_classification
 from script.exp_train import multi_exp_classification
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--df_path", required= True, type=str, help="데이터셋 csv파일 경로")
+    parser.add_argument("--dataset_name", required= True, type=str, help="데이터셋 이름")
     parser.add_argument("--model_name", required= True, type=str, help="모델 이름")
     parser.add_argument("--model_type", required= True, type=str, help="모델 타입")
     parser.add_argument("--lr", required= True, type=float, help="학습률")

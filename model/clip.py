@@ -44,14 +44,13 @@ class model_setup(nn.Module):
             pass
 
         for param in self.clip_model.parameters(): # clip model은 파라미터 고정 classifier만 학습
-            param.requires_grad = False
+            param.requires_grad = True
         print(f"[CLIP Weight] 🧊 Freeze")
 
     def forward(self, x):
         # 입력도 float32로 맞춘다
         x = x.to('cuda:0').to(torch.float32)
 
-        # clip_model과 classifier 모두 float32일 때
         image_features = self.clip_model.encode_image(x)
         logit = self.classifier(image_features)
         if self.num_classes == 1:
