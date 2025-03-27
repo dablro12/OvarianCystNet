@@ -1,0 +1,26 @@
+import torch.nn as nn
+from torchvision import models
+
+class model_setup(nn.Module):
+    """ 
+        Ref : https://pytorch.org/vision/stable/models/generated/torchvision.models.efficientnet_v2_l.html#torchvision.models.efficientnet_v2_l
+    """
+    
+    def __init__(self, type, num_classes= 1):
+        super(model_setup, self).__init__()
+        self.num_classes = num_classes
+        if type == 's': # Resize : 384
+            self.base_model = models.efficientnet_v2_s(weights = models.EfficientNet_V2_S_Weights)
+        elif type == 'm': # Resize : 480
+            self.base_model = models.efficientnet_v2_m(weights = models.EfficientNet_V2_M_Weights)
+        elif type == 'l': # Resize : 480
+            self.base_model = models.efficientnet_v2_l(weights = models.EfficientNet_V2_L_Weights)
+        self.base_model.classifier[-1] = nn.Linear(1280, num_classes)
+            
+        
+    def forward(self, x):
+        if self.num_classes == 1:
+            return self.base_model(x).view(-1)
+        else:
+            return self.base_model(x)
+
