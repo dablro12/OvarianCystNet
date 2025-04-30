@@ -22,7 +22,6 @@ class BalancedBatchSampler(torch.utils.data.Sampler):
             if label not in self.dataset:
                 self.dataset[label] = []
             self.dataset[label].append(idx)
-        print(self.dataset.keys())
         self.keys = list(self.dataset.keys())
         
         self.num_classes = len(self.keys)

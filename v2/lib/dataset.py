@@ -6,26 +6,27 @@ from lib.augmentation import PairedAffineTransform
 from PIL import Image
 import os
 import torch 
-import random 
-
+import random
+import numpy as np
 class PCOS_Dataset(Dataset):
-    def __init__(self, data_filenames, data_dir_path, labels = None, sample_data_filenames = None, sample_data_dir_path = None, sample_labels = None, transform=None, binary_use = False, need_paths = False):
+    def __init__(self, data_filenames, data_dir_path, labels=None, sample_data_filenames=None, sample_data_dir_path=None, sample_labels=None, transform=None, binary_use=False, need_paths=False):
         # [DEF] data
         self.data_dir_path = data_dir_path
         self.data_filenames = data_filenames
         self.data_filepaths = [os.path.join(data_dir_path, filename +'.png') for filename in self.data_filenames]
+        self.binary_use = binary_use
+        self.need_paths = need_paths
+        self.transform = transform
         self.labels = labels
+        
         print(f"[Alert] Sample Dataset Use : {True if sample_data_filenames is not None else False}")
         if sample_data_filenames is not None: # sample_data_filenames이 있는 경우 data_filenames에 추가
             self.data_filenames = data_filenames + sample_data_filenames
-            self.sample_data_filepaths=  [os.path.join(sample_data_dir_path, filename +'.png') for filename in sample_data_filenames]
+            self.sample_data_filepaths = [os.path.join(sample_data_dir_path, filename +'.png') for filename in sample_data_filenames]
             self.data_filepaths = self.data_filepaths + self.sample_data_filepaths
             self.labels = labels + sample_labels
         
-        self.binary_use = binary_use
-        self.need_paths = need_paths
-        
-        self.transform = transform
+
     def __len__(self):
         return len(self.data_filenames)
     
@@ -33,18 +34,26 @@ class PCOS_Dataset(Dataset):
         data = Image.open(self.data_filepaths[idx])
         label = self.labels[idx]  # label이 int/float/list/np.array 등일 수 있음
         
-        if self.binary_use:# 단일 분류 모델인경우
+        # Robust label conversion
+        if isinstance(label, (list, np.ndarray)):
+            label = label[0] if len(label) > 0 else 0
+        
+        # Ensure label is a scalar
+        label = int(label)
+        
+        if self.binary_use:
+            # 단일 분류 모델인경우
             # before_datasheet.csv (기존에 있던 데이터시트) : 0 - 양성, 1 - 중간형, 2 - 악성
-            # label = 1 if label == 2 else 0 # 보더라인을 양성에 붙힌 경우 : 0.75161
-            label = 0 if label == 0 else 1 # 보더라인을 악성에 붙힌 경우 0 : 양성 / 1 : 악성 및 보더라인 # Recall : 0.2
-            # label = 1 if label == 0 else 0 # 반대로 지정해보기 1 : 양성 / 0 : 악성 및 보더라인 # Recall : 0.8
+            # label = 0 if label == 0 else 1 # 보더라인을 악성에 붙힌 경우 0 : 양성 / 1 : 악성 및 보더라인 # Recall : 0.2
+            label = 1 if label == 2 else 0 # 반대로 지정해보기 1 : 양성 / 0 : 악성 및 보더라인 # Recall : 0.8
 
             # datasheet.csv (새로 업데이트된 데이터시트) : 0 - 양성, 1 - 악성, 2 - 중간형
             # 다중 뷴류 문제라면 float 타입을 쓰는 경우가 많습니다. (원-핫이 아닌 class index라고 가정)
-            label = torch.tensor(label, dtype=torch.float32)
+            # label = torch.tensor(label, dtype=torch.float16)
         else:
+            pass
             # 다중 뷴류 문제라면 long 타입을 쓰는 경우가 많습니다. (원-핫이 아닌 class index라고 가정)
-            label = torch.tensor(label, dtype=torch.long)
+            # label = torch.tensor(label, dtype=torch.float16)
         
         if self.transform:
             data = self.transform(data)  # data는 보통 Tensor로 변환됨

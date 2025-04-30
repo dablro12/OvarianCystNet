@@ -85,9 +85,6 @@ class Poly1FocalLoss(nn.Module):
             one-hot encoded tensor of same shape as logits
         :return: poly focal loss
         """
-        # focal loss implementation taken from
-        # https://github.com/facebookresearch/fvcore/blob/main/fvcore/nn/focal_loss.py
-
         p = torch.sigmoid(logits)
 
         if not self.label_is_onehot:

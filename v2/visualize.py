@@ -8,6 +8,7 @@ import timm
 
 from sklearn.metrics import roc_curve, auc
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 def plot_roc_curve(true_labels, pred_probs, binary_use, save_path = False, class_names=None):
     """
@@ -99,3 +100,72 @@ def plot_roc_curve(true_labels, pred_probs, binary_use, save_path = False, class
         plt.close()
         
         return optimal_thresholds
+    
+def visualize_confidence_scores(confidence_scores, labels, class_names, save_path="confidence_score_plot.png"):
+    """
+    테스트 데이터셋의 Confidence Score를 저장하고 시각화하는 함수.
+    각 클래스별 평균 및 95% 신뢰구간을 시각화하여 신뢰도를 분석.
+    
+    :param confidence_scores: PyTorch Tensor (샘플 x 클래스) 또는 (샘플, )
+    :param labels: 실제 라벨 (샘플, )
+    :param class_names: 클래스 이름 리스트
+    :param save_path: 저장할 파일 경로
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import torch
+
+    # PyTorch Tensor -> NumPy 변환
+    if isinstance(confidence_scores, torch.Tensor):
+        confidence_scores = confidence_scores.detach().cpu().numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.detach().cpu().numpy()
+    
+    # 차원 확인 및 변환
+    if len(confidence_scores.shape) == 1:
+        confidence_scores = confidence_scores.reshape(-1, 1)
+
+    # 이진 분류 또는 다중 분류에 따른 클래스 처리
+    num_classes = len(class_names)
+
+    # 입력 데이터 크기 확인 및 예외 처리
+    if confidence_scores.shape[1] < num_classes:
+        # 부족한 클래스를 0으로 채워서 처리
+        padding = num_classes - confidence_scores.shape[1]
+        confidence_scores = np.pad(confidence_scores, ((0, 0), (0, padding)), mode='constant', constant_values=0)
+        print(f"Warning: Confidence scores have fewer columns ({confidence_scores.shape[1]}) than expected classes ({num_classes}). Padding with zeros.")
+
+    # 시각화 설정
+    plt.figure(figsize=(10, 6))
+    palette = sns.color_palette("husl", num_classes)
+
+    # 각 클래스별 분포 박스 플롯
+    boxplot_data = []
+    for i in range(num_classes):
+        class_scores = confidence_scores[:, i]
+        boxplot_data.append(class_scores)
+
+    # 박스 플롯 생성
+    plt.boxplot(boxplot_data, labels=class_names, patch_artist=True,
+                boxprops=dict(facecolor='lightblue', color='black'),
+                medianprops=dict(color="red"),
+                whiskerprops=dict(color='black'),
+                capprops=dict(color='black'))
+
+    # 각 포인트 오버레이
+    for i, class_scores in enumerate(boxplot_data):
+        # 랜덤 지터 추가하여 겹침 방지
+        x = np.random.normal(i+1, 0.04, size=len(class_scores))
+        plt.scatter(x, class_scores, alpha=0.5, color=palette[i], edgecolors='black', linewidth=0.5)
+
+    # 레이블 및 제목 설정
+    plt.title("Confidence Scores Distribution by Class", fontsize=14)
+    plt.xlabel("Class", fontsize=12)
+    plt.ylabel("Confidence Score", fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # 저장 및 표시
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.close()

@@ -3,22 +3,27 @@ import pandas as pd
 from lib.sampler import BalancedBatchSampler
 from lib.seed import seed_prefix
 from lib.augmentation import SpeckleNoise
-def workflow_data(datasheet_path, data_dir, sample_datasheet_path=None, sample_data_dir=None, binary_use = False, sampler = None):
+def workflow_data(datasheet_path, data_dir, sample_datasheet_path=None, sample_data_dir=None, binary_use = False, sampler = None, borderline_use = True):
     data_df = pd.read_csv(datasheet_path)
     train_df, _ = data_split(data_df, split_num = 5)
     train_df, valid_df = data_split(train_df, split_num = 5)
     
-    if sample_df is not None:
+    if sample_datasheet_path is not None:
         sample_df = pd.read_csv(sample_datasheet_path)
-        # sample_df = sample_weight_distribution(sample_df, sample_weight = [1.0, 1.0, 1.0])
+        sample_df = sample_weight_distribution(sample_df, sample_weight=[0.1, 0.1, 0.1], seed=42)
     else:
         sample_df = None
+
+    if borderline_use == False: # Borderline 제거하기
+        df = df[df['label|0:양성, 1:중간형, 2:악성'] != 1]
+        df = df.reset_index(drop=True)
+        print(f"Borderline Use : {borderline_use}")
     
     train_loader = workflow_dataset(train_df, data_dir, sample_df= sample_df, sample_data_dir= sample_data_dir, type='train', sampler = sampler, binary_use= binary_use)
     valid_loader = workflow_dataset(valid_df, data_dir, type='valid', binary_use= binary_use)
     return train_loader, valid_loader
 
-def workflow_k_fold_data(datasheet_path, data_dir, sample_datasheet_path=None, sample_data_dir=None, binary_use = False, sampler=None, n_splits=5, fdx:int = 0):
+def workflow_k_fold_data(datasheet_path, data_dir, sample_datasheet_path=None, sample_data_dir=None, binary_use = False, sampler=None, n_splits=5, fdx:int = 0, borderline_use = True):
     """
         workflow_k_fold_data : K-Fold 데이터 분할 후 DataLoader 반환하는 함수
         (변경점) 기존 workflow_data 함수에서 K-Fold 분할을 추가한 함수
@@ -26,9 +31,14 @@ def workflow_k_fold_data(datasheet_path, data_dir, sample_datasheet_path=None, s
     df = pd.read_csv(datasheet_path)
     if sample_datasheet_path is not None:
         sample_df = pd.read_csv(sample_datasheet_path)
-        # sample_df = sample_weight_distribution(sample_df, sample_weight = [1.0, 1.0, 1.0])
+        sample_df = sample_weight_distribution(sample_df, sample_weight=[0.1, 0.1, 0.1], seed=42)
     else:
         sample_df = None
+    
+    if borderline_use == False: # Borderline 제거하기
+        df = df[df['label|0:양성, 1:중간형, 2:악성'] != 1]
+        df = df.reset_index(drop=True)
+        print(f"Borderline Use : {borderline_use}")
     
     # 미리 5개 폴드로 분할
     df, _ = data_split(df, split_num = 5)
@@ -40,7 +50,6 @@ def workflow_k_fold_data(datasheet_path, data_dir, sample_datasheet_path=None, s
     
     train_df = df.iloc[train_idx].reset_index(drop=True)
     valid_df = df.iloc[valid_idx].reset_index(drop=True)
-    
     train_loader = workflow_dataset(train_df, data_dir, sample_df = sample_df, sample_data_dir = sample_data_dir, type='train', bs = 24, sampler=sampler, binary_use = binary_use)
     valid_loader = workflow_dataset(valid_df, data_dir, type='valid', bs = 24, binary_use = binary_use)
     return train_loader, valid_loader
@@ -51,20 +60,19 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as T
 from torchvision.transforms import v2
 
-def workflow_dataset(df:pd.DataFrame, data_dir:str, sample_df=None, sample_data_dir=None, type:str = 'train', bs:int = 24, sampler:str = None, binary_use:bool = False):
+def workflow_dataset(df:pd.DataFrame, data_dir:str, sample_df=None, sample_data_dir=None, type:str = 'train', bs:int = 24, sampler:str = None, binary_use:bool = False, ) -> DataLoader:
     if type == 'train':
         dataset = PCOS_Dataset(
             data_filenames = df['filename'],
             data_dir_path  = data_dir,
-            sample_data_filenames = sample_df['filename'],
-            sample_data_dir_path = sample_data_dir,
             labels         = df['label|0:양성, 1:중간형, 2:악성'],
-            sample_labels  = sample_df['label|0:양성, 1:중간형, 2:악성'],
+            sample_data_filenames = sample_df['filename'] if sample_df is not None else None,
+            sample_data_dir_path = sample_data_dir if sample_data_dir is not None else None,
+            sample_labels  = sample_df['label|0:양성, 1:중간형, 2:악성'] if sample_df is not None else None,
             binary_use = binary_use,
             transform = v2.Compose([
-                v2.Resize((296, 296)), # 먼저 296x296으로 Resize
-                v2.CenterCrop(252),           # 224x224 중앙 자르기 -> 0.7977
-                # v2.RandomResizedCrop(224),           # 224x224 렌담 중앙 자르기 -> 0.8089
+                # v2.Resize((296, 296)), # 먼저 296x296으로 Resize
+                # v2.CenterCrop(252),           # 224x224 중앙 자르기 -> 0.7977
                 v2.RandomResizedCrop(224, scale = (0.8 ,1.2)),           # 224x224 렌담 중앙 줌인/줌아웃 자르기 -> 0.8089
                 # Augmenttation 추가
                 # RandomEqualize(p=0.5),    # Histogram Equalized
@@ -104,6 +112,9 @@ def workflow_dataset(df:pd.DataFrame, data_dir:str, sample_df=None, sample_data_
             data_filenames = df['filename'],
             data_dir_path  = data_dir,
             labels         = df['label|0:양성, 1:중간형, 2:악성'],
+            sample_data_filenames = sample_df['filename'].reset_index(drop=True) if sample_df is not None else None,
+            sample_data_dir_path = sample_data_dir if sample_data_dir is not None else None,
+            sample_labels = sample_df['label|0:양성, 1:중간형, 2:악성'].reset_index(drop=True) if sample_df is not None else None,
             binary_use = binary_use,
             transform = v2.Compose([
                 v2.Resize((296, 296)), # 먼저 296x296으로 Resize
@@ -117,7 +128,7 @@ def workflow_dataset(df:pd.DataFrame, data_dir:str, sample_df=None, sample_data_
     return loader
 
 
-def sample_weight_distribution(sample_df:pd.DataFrame, sample_weight:list = [1.0, 1.0, 1.0]):
+def sample_weight_distribution(sample_df:pd.DataFrame, sample_weight:list = [1.0, 1.0, 1.0], seed:int = 42) -> pd.DataFrame:
     """
     3개의 클래스에 대해 얼마나 샘플링을 할지 결정하는 함수
     sample_weight index 순서대로 0, 1, 2 클래스에 대해 얼마나 가져올지에 대한 가중치를 의미
@@ -136,12 +147,13 @@ def sample_weight_distribution(sample_df:pd.DataFrame, sample_weight:list = [1.0
     class_2_sample_num = int(len(class_2_df) * sample_weight[2])
     
     # 랜덤으로 가져오기
-    class_0_df = class_0_df.sample(n = class_0_sample_num, random_state = seed_prefix)
-    class_1_df = class_1_df.sample(n = class_1_sample_num, random_state = seed_prefix)
-    class_2_df = class_2_df.sample(n = class_2_sample_num, random_state = seed_prefix)
+    class_0_df = class_0_df.sample(n = class_0_sample_num, random_state = seed)
+    class_1_df = class_1_df.sample(n = class_1_sample_num, random_state = seed)
+    class_2_df = class_2_df.sample(n = class_2_sample_num, random_state = seed)
     
     # 샘플링한 데이터프레임을 합쳐서 반환
     sample_weight_df = pd.concat([class_0_df, class_1_df, class_2_df], axis = 0)
-    
+    sample_weight_df = sample_weight_df.reset_index(drop=True)
+    print(f"Sampling Result : {len(sample_weight_df)}")
     return sample_weight_df
     

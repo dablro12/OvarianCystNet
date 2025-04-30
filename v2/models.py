@@ -1,6 +1,7 @@
 from torchvision import models
 import torch.nn as nn
 import os 
+import timm
 # Load Model weight
 def get_checkpoint_path(checkpoint_dir, datetime):
     ckpt_paths = [os.path.join(checkpoint_dir, f'{datetime}_fold{num}.pth')for num in range(1,6)]
@@ -113,8 +114,15 @@ def Model_Loader(model_name, num_classes):
         model = dict()
         model['G'] = Gen
         model['D'] = Dis
+    
+    #%% [Model] DinoV2 Series
+    elif model_name.split('_')[0] == "dinov2":
+        from model.dino_v2 import DinoClassifier
+        model = DinoClassifier(model_name = model_name, num_classes=num_classes)
+
     else:
         raise ValueError("Model Name is not Correct")
     
+    
         
-    return model 
+    return model

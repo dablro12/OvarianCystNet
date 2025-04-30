@@ -256,7 +256,8 @@ class PCOS_trainer:
                 sampler=self.args.sampler_name,
                 n_splits=self.args.k_fold,
                 fdx = self.args.fold_num,
-                binary_use = self.args.binary_use
+                binary_use = self.args.binary_use,
+                borderline_use = self.args.borderline_use,
             )
         else:
             from data import workflow_data  # 기존 분할 함수
@@ -266,7 +267,8 @@ class PCOS_trainer:
                 sample_data_dir= self.args.sample_data_dir,
                 sample_datasheet_path= self.args.sample_datasheet_path,
                 sampler=self.args.sampler_name,
-                binary_use = self.args.binary_use
+                binary_use = self.args.binary_use,
+                borderline_use = self.args.borderline_use,
             )
     
     def init_model(self):
@@ -283,11 +285,23 @@ class PCOS_trainer:
         else:
             if self.args.loss_name == 'polyl1ce':
                 from loss import Poly1CrossEntropyLoss
-                self.criterion = Poly1CrossEntropyLoss(num_classes = self.num_classes, reduction = 'mean')
+                self.criterion = Poly1CrossEntropyLoss(num_classes = self.num_classes, reduction = 'mean').to(self.args.device)
             elif self.args.loss_name == 'poly1focal':
                 from loss import Poly1FocalLoss
-                pos_weight = torch.tensor([1., 5., 5.]).reshape([1, self.num_classes]).to(self.args.device)
-                self.criterion = Poly1FocalLoss(num_classes = self.num_classes, reduction = 'mean', label_is_onehot = False, pos_weight = pos_weight)
+                if self.args.binary_use:
+                    self.criterion = Poly1FocalLoss(
+                        num_classes = self.num_classes,
+                        reduction = 'mean',
+                        label_is_onehot = True,
+                        pos_weight = torch.tensor([3.]).to(self.args.device)
+                    ).to(self.args.device)
+                else:
+                    self.criterion = Poly1FocalLoss(
+                        num_classes = self.num_classes, 
+                        reduction = 'mean', 
+                        label_is_onehot = False, 
+                        pos_weight = torch.tensor([1., 5., 5.]).reshape([1, self.num_classes]).to(self.args.device)
+                    ).to(self.args.device)
             else:
                 self.criterion = nn.CrossEntropyLoss(label_smoothing=self.args.loss_label_smoothing).to(self.args.device)
 
@@ -406,7 +420,12 @@ class PCOS_trainer:
             
             self.optimizer.zero_grad()
             y_res = self.model(X)  # [B x num_classes] 또는 [B x 1]
-            loss = self.criterion(y_res, y.unsqueeze(1) if self.args.binary_use else y)
+            
+            # 이진 분류일 경우 Float 타입으로 변환
+            if self.args.binary_use:
+                y = y.float()
+                
+            loss = self.criterion(y_res, y)
             loss.backward()
             self.optimizer.step()
             
@@ -436,8 +455,12 @@ class PCOS_trainer:
                 X_val = X_val.to(self.args.device)
                 y_val = y_val.to(self.args.device)
                 
+                # 이진 분류일 경우 Float 타입으로 변환
+                if self.args.binary_use:
+                    y_val = y_val.float()
+                    
                 y_res_val = self.model(X_val) # [B x num_classes]
-                loss_val = self.criterion(y_res_val, y_val.unsqueeze(1) if self.args.binary_use else y_val)
+                loss_val = self.criterion(y_res_val, y_val)
                 val_loss += loss_val.item()
                 
                 if self.args.binary_use:
@@ -464,7 +487,7 @@ class PCOS_trainer:
 # ======================= #
 # Main 실행부
 # ======================= #
-if __name__ == "__main__":
+def exp1():
     class Args:
         pass
     args = Args()
@@ -482,17 +505,22 @@ if __name__ == "__main__":
     #%% [Data]
     args.datasheet_path = os.getenv('DATASHEET_PATH')
     args.data_dir = os.getenv('DATA_DIR')
-    args.sample_datasheet_path = os.getenv("SAMPLE_DATASHEET_PATH")
-    args.sample_data_dir = os.getenv("SAMPLE_DATA_DIR")
+    args.borderline_use = True  # Borderline 사용시 : True / Borderline 사용안할시 : False
+    
+    #%% [Sample Data] : 데이터 분할 후 테스트 진행 시 사용
+    args.sample_data_use = False 
+    args.sample_datasheet_path = os.getenv("SAMPLE_DATASHEET_PATH") if args.sample_data_use else None
+    args.sample_data_dir = os.getenv("SAMPLE_DATA_DIR") if args.sample_data_use else None
     
     args.binary_use = True # 보더라인을 양성에 붙힌 경우 : 0.7246253000224796 / 보더라인을 음성에 붙힌 경우 : 0.7071438091142334 / Multi Class : 0.7119426832054033
+    # args.sampler_name = 'balanced' # Default : None / 'balanced' / 'weighted' -> 0.6457(사용X) / 0.5994(사용시)
     args.sampler_name = None # Default : None / 'balanced' / 'weighted' -> 0.6457(사용X) / 0.5994(사용시)
     args.use_kfold = True
     args.k_fold = 5
     
     #%% [Model]
-    args.model_name = 'resnet'
-    args.model_version = '18'
+    args.model_name = 'dinov2'
+    args.model_version = 'vits14_lc'
     
     #%% [Hyperparameters]
     args.loss_name = 'polyl1ce' # None / 'polyl1ce' / 'poly1focal'
@@ -500,7 +528,8 @@ if __name__ == "__main__":
     args.warmup_epochs = 20
     args.patience = 18 # Best 0.6399 : 최적
     args.loss_label_smoothing = 0.028280726462559483 # 최적 0.864
-    args.lr = 0.0000063301 # 최적 0.864
+    # args.lr = 0.0000063301 # 최적 0.864
+    args.lr = 0.0000013301 # 최적 
 
     #%% [Scheduler]
     args.scheduler_type = 'cosine' # 'plateau' / 'cosine' / 'StepLR' / 'MultiStepLR' / 'CyclicLR' / 'CosineAnnealingWarmRestarts'
@@ -520,7 +549,7 @@ if __name__ == "__main__":
 
     #%% [Experiment Name]
     # args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_borderline2Malignant"
-    args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_[Test]Sample"
+    args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_[Experiment]polyl1ce"
     
     # Trainer 생성 및 학습 실행
     trainer = PCOS_trainer(args)
@@ -533,3 +562,164 @@ if __name__ == "__main__":
         avg_auc = trainer.fit()
         with open(f"log/{args.exp_date}_avg_auc.txt", 'w') as f:
             f.write(str(avg_auc))
+            
+# ======================= #
+def exp2():
+    class Args:
+        pass
+    args = Args()
+    
+    #%% [WanDB]
+    args.use_wandb = True
+    args.project_name = "PCOS_Classification"
+
+    #%% [Logging]
+    args.exp_date = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    
+    #%% [Setting]
+    args.device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+    
+    #%% [Data]
+    args.datasheet_path = os.getenv('DATASHEET_PATH')
+    args.data_dir = os.getenv('DATA_DIR')
+    args.borderline_use = True  # Borderline 사용시 : True / Borderline 사용안할시 : False
+    
+    #%% [Sample Data] : 데이터 분할 후 테스트 진행 시 사용
+    args.sample_data_use = False 
+    args.sample_datasheet_path = os.getenv("SAMPLE_DATASHEET_PATH") if args.sample_data_use else None
+    args.sample_data_dir = os.getenv("SAMPLE_DATA_DIR") if args.sample_data_use else None
+    
+    args.binary_use = True # 보더라인을 양성에 붙힌 경우 : 0.7246253000224796 / 보더라인을 음성에 붙힌 경우 : 0.7071438091142334 / Multi Class : 0.7119426832054033
+    # args.sampler_name = 'balanced' # Default : None / 'balanced' / 'weighted' -> 0.6457(사용X) / 0.5994(사용시)
+    args.sampler_name = None # Default : None / 'balanced' / 'weighted' -> 0.6457(사용X) / 0.5994(사용시)
+    args.use_kfold = True
+    args.k_fold = 5
+    
+    #%% [Model]
+    args.model_name = 'dinov2'
+    args.model_version = 'vits14_lc'
+    
+    #%% [Hyperparameters]
+    args.loss_name = 'poly1focal' # None / 'polyl1ce' / 'poly1focal'
+    args.epoch = 50
+    args.warmup_epochs = 20
+    args.patience = 18 # Best 0.6399 : 최적
+    args.loss_label_smoothing = 0.028280726462559483 # 최적 0.864
+    # args.lr = 0.0000063301 # 최적 0.864
+    args.lr = 0.0000013301 # 최적 
+
+    #%% [Scheduler]
+    args.scheduler_type = 'cosine' # 'plateau' / 'cosine' / 'StepLR' / 'MultiStepLR' / 'CyclicLR' / 'CosineAnnealingWarmRestarts'
+    args.scheduler_factor = 0.1  # ReduceLROnPlateau에서 사용: 검증 지표가 개선되지 않을 때 학습률을 몇 배로 줄일지 결정 (예: 0.1은 10배 감소)
+    args.scheduler_patience = args.patience // 2  # ReduceLROnPlateau에서 사용: 몇 에폭 동안 개선이 없을 때 학습률을 감소시킬지 결정하는 patience 값
+    args.scheduler_T_max = args.epoch - args.warmup_epochs  # CosineAnnealingLR에서 사용: 코사인 주기의 길이를 지정 (warmup 이후 전체 에폭 수)
+    args.scheduler_eta_min = 1e-6  # CosineAnnealingLR에서 사용: 학습률의 최저 한계를 지정
+    args.scheduler_step_size = 10  # StepLR에서 사용: 몇 에폭마다 학습률을 감소시킬지 결정하는 step_size
+    args.scheduler_gamma = 0.5  # StepLR, MultiStepLR, CyclicLR 등에서 사용: 학습률 감소 시 적용할 곱셈 계수 (예: 0.5는 50% 감소)
+    args.scheduler_milestones = [10, 30, 50]  # MultiStepLR에서 사용: 학습률을 감소시킬 에폭의 리스트
+    args.scheduler_max_lr_scale = 10.0  # CyclicLR에서 사용: 최대 학습률을 결정할 때 기본 lr에 곱해질 배수 (예: 10배)
+    args.scheduler_step_size_up = 5  # CyclicLR에서 사용: 학습률이 상승하는 단계(에폭 수)를 지정
+    args.scheduler_step_size_down = 5  # CyclicLR에서 사용: 학습률이 하강하는 단계(에폭 수)를 지정
+    args.scheduler_T0 = 10  # CosineAnnealingWarmRestarts에서 사용: 첫 주기의 길이를 지정하는 파라미터
+    args.scheduler_T_mult = 1  # CosineAnnealingWarmRestarts에서 사용: 이후 주기의 주기 배수를 결정 (1이면 주기가 동일)
+    args.scheduler_eta_min_scale = 0.1  # CosineAnnealingWarmRestarts에서 사용: 최소 학습률을 결정할 때 기본 lr에 곱해질 배수 (예: 0.1은 10% 수준)
+
+    #%% [Experiment Name]
+    # args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_borderline2Malignant"
+    args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_[Experiment]poly1focal"
+    
+    # Trainer 생성 및 학습 실행
+    trainer = PCOS_trainer(args)
+    if args.use_kfold:
+        avg_auc = trainer.k_fold_fit()
+        # log 파일로 평균 AUC 저장
+        with open(f"log/{args.exp_date}_avg_auc.txt", 'w') as f:
+            f.write(str(avg_auc))
+    else:
+        avg_auc = trainer.fit()
+        with open(f"log/{args.exp_date}_avg_auc.txt", 'w') as f:
+            f.write(str(avg_auc))
+
+# ======================= #
+def exp3():
+    class Args:
+        pass
+    args = Args()
+    
+    #%% [WanDB]
+    args.use_wandb = True
+    args.project_name = "PCOS_Classification"
+
+    #%% [Logging]
+    args.exp_date = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    
+    #%% [Setting]
+    args.device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+    
+    #%% [Data]
+    args.datasheet_path = os.getenv('DATASHEET_PATH')
+    args.data_dir = os.getenv('DATA_DIR')
+    args.borderline_use = True  # Borderline 사용시 : True / Borderline 사용안할시 : False
+    
+    #%% [Sample Data] : 데이터 분할 후 테스트 진행 시 사용
+    args.sample_data_use = False 
+    args.sample_datasheet_path = os.getenv("SAMPLE_DATASHEET_PATH") if args.sample_data_use else None
+    args.sample_data_dir = os.getenv("SAMPLE_DATA_DIR") if args.sample_data_use else None
+    
+    args.binary_use = True # 보더라인을 양성에 붙힌 경우 : 0.7246253000224796 / 보더라인을 음성에 붙힌 경우 : 0.7071438091142334 / Multi Class : 0.7119426832054033
+    # args.sampler_name = 'balanced' # Default : None / 'balanced' / 'weighted' -> 0.6457(사용X) / 0.5994(사용시)
+    args.sampler_name = None # Default : None / 'balanced' / 'weighted' -> 0.6457(사용X) / 0.5994(사용시)
+    args.use_kfold = True
+    args.k_fold = 5
+    
+    #%% [Model]
+    args.model_name = 'dinov2'
+    args.model_version = 'vits14_lc'
+    
+    #%% [Hyperparameters]
+    args.loss_name = 'CE' # None / 'polyl1ce' / 'poly1focal'
+    args.epoch = 50
+    args.warmup_epochs = 20
+    args.patience = 18 # Best 0.6399 : 최적
+    args.loss_label_smoothing = 0.028280726462559483 # 최적 0.864
+    # args.lr = 0.0000063301 # 최적 0.864
+    args.lr = 0.0000013301 # 최적 
+
+    #%% [Scheduler]
+    args.scheduler_type = 'cosine' # 'plateau' / 'cosine' / 'StepLR' / 'MultiStepLR' / 'CyclicLR' / 'CosineAnnealingWarmRestarts'
+    args.scheduler_factor = 0.1  # ReduceLROnPlateau에서 사용: 검증 지표가 개선되지 않을 때 학습률을 몇 배로 줄일지 결정 (예: 0.1은 10배 감소)
+    args.scheduler_patience = args.patience // 2  # ReduceLROnPlateau에서 사용: 몇 에폭 동안 개선이 없을 때 학습률을 감소시킬지 결정하는 patience 값
+    args.scheduler_T_max = args.epoch - args.warmup_epochs  # CosineAnnealingLR에서 사용: 코사인 주기의 길이를 지정 (warmup 이후 전체 에폭 수)
+    args.scheduler_eta_min = 1e-6  # CosineAnnealingLR에서 사용: 학습률의 최저 한계를 지정
+    args.scheduler_step_size = 10  # StepLR에서 사용: 몇 에폭마다 학습률을 감소시킬지 결정하는 step_size
+    args.scheduler_gamma = 0.5  # StepLR, MultiStepLR, CyclicLR 등에서 사용: 학습률 감소 시 적용할 곱셈 계수 (예: 0.5는 50% 감소)
+    args.scheduler_milestones = [10, 30, 50]  # MultiStepLR에서 사용: 학습률을 감소시킬 에폭의 리스트
+    args.scheduler_max_lr_scale = 10.0  # CyclicLR에서 사용: 최대 학습률을 결정할 때 기본 lr에 곱해질 배수 (예: 10배)
+    args.scheduler_step_size_up = 5  # CyclicLR에서 사용: 학습률이 상승하는 단계(에폭 수)를 지정
+    args.scheduler_step_size_down = 5  # CyclicLR에서 사용: 학습률이 하강하는 단계(에폭 수)를 지정
+    args.scheduler_T0 = 10  # CosineAnnealingWarmRestarts에서 사용: 첫 주기의 길이를 지정하는 파라미터
+    args.scheduler_T_mult = 1  # CosineAnnealingWarmRestarts에서 사용: 이후 주기의 주기 배수를 결정 (1이면 주기가 동일)
+    args.scheduler_eta_min_scale = 0.1  # CosineAnnealingWarmRestarts에서 사용: 최소 학습률을 결정할 때 기본 lr에 곱해질 배수 (예: 0.1은 10% 수준)
+
+    #%% [Experiment Name]
+    # args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_borderline2Malignant"
+    args.experiment_name = f"{args.model_name}_{args.model_version}_Exp_[Experiment]CE"
+    
+    # Trainer 생성 및 학습 실행
+    trainer = PCOS_trainer(args)
+    if args.use_kfold:
+        avg_auc = trainer.k_fold_fit()
+        # log 파일로 평균 AUC 저장
+        with open(f"log/{args.exp_date}_avg_auc.txt", 'w') as f:
+            f.write(str(avg_auc))
+    else:
+        avg_auc = trainer.fit()
+        with open(f"log/{args.exp_date}_avg_auc.txt", 'w') as f:
+            f.write(str(avg_auc))
+            
+            
+            
+if __name__ == "__main__":
+    exp1()
+    exp2()
+    exp3()
