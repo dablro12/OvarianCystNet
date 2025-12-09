@@ -13,7 +13,7 @@ from transformers import (
     Trainer,
 )
 import evaluate
-
+from utils.loss import WeightedLossTrainer
 from utils.dataset import (
     PCOSDataset,
     HFVisionDataset,
@@ -23,6 +23,24 @@ from utils.dataset import (
 )
 from utils.transform import get_transform
 from torchvision import transforms
+def _safe_value(v):
+    # dict → 첫 번째 값 추출
+    if isinstance(v, dict):
+        v = list(v.values())[0]
+
+    # numpy → python 기본 타입으로 변환
+    if isinstance(v, (np.float32, np.float64, np.int64, np.int32)):
+        return float(v)
+
+    # 리스트 → confusion matrix 같은 경우: 문자열로 변환
+    if isinstance(v, list):
+        return str(v)  # 또는 json.dumps(v) 저장해도 됨
+
+    # float 변환 가능한 경우
+    try:
+        return float(v)
+    except:
+        return str(v)
 
 
 class PCOSKFoldTrainer:
@@ -36,9 +54,9 @@ class PCOSKFoldTrainer:
         num_epochs: int = 5,
         learning_rate: float = 5e-5,
         optim_name: str = "adamw_torch",      # "grokadamw", "stable_adamw", "apollo_adamw", "adamw_torch"...
-        weight_decay: float = 0.01,
+        weight_decay: float = 0.05,
         lr_scheduler_type: str = "cosine",    # "linear", "cosine", "constant_with_warmup" ...
-        warmup_ratio: float = 0.1,
+        warmup_ratio: float = 0.2, # 초반 학습을 더 부드럽게 만들어 Loss Blow-Up방지
         fp16: bool = False,
         bf16: bool = False,
         grad_accum_steps: int = 1,
@@ -93,10 +111,6 @@ class PCOSKFoldTrainer:
         self.logging_backend = logging_backend
         self.wandb_project = wandb_project
 
-        # Metrics
-        self.accuracy = evaluate.load("accuracy")
-        self.f1 = evaluate.load("f1")
-
         # Load CSV
         self.label_df = pd.read_csv(label_path)
 
@@ -109,10 +123,6 @@ class PCOSKFoldTrainer:
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.RandomVerticalFlip(p=0.5),
                 transforms.RandomRotation(10),
-                transforms.RandomAffine(
-                    degrees=0, translate=(0.05, 0.05), scale=(0.95, 1.05)
-                ),
-                transforms.RandomResizedCrop(224, scale=(0.9, 1.0)),
             ]
         )
 
@@ -125,13 +135,47 @@ class PCOSKFoldTrainer:
     # ----- Metrics ----------
     # ------------------------
     def compute_metrics(self, eval_pred):
-        logits, labels = eval_pred
+        # Classification 논문에서 자주 사용하는 metric 포함
+        from sklearn.metrics import (
+            accuracy_score,
+            f1_score,
+            precision_score,
+            recall_score,
+            roc_auc_score,
+            confusion_matrix,
+            cohen_kappa_score,
+            matthews_corrcoef
+        )
+        logits = eval_pred.predictions
+        labels = eval_pred.label_ids
         preds = np.argmax(logits, axis=1)
 
-        return {
-            "f1": self.f1.compute(references=labels, predictions=preds, average="macro")["f1"],
-            "accuracy": self.accuracy.compute(references=labels, predictions=preds)["accuracy"],
+        # Handle binary/multiclass flag
+        average_type = "macro" if len(np.unique(labels)) > 2 else "binary"
+        results = {
+            "accuracy": accuracy_score(labels, preds),
+            "f1_macro": f1_score(labels, preds, average="macro"),
+            "f1_micro": f1_score(labels, preds, average="micro"),
+            "precision_macro": precision_score(labels, preds, average="macro", zero_division=0),
+            "precision_micro": precision_score(labels, preds, average="micro", zero_division=0),
+            "recall_macro": recall_score(labels, preds, average="macro"),
+            "recall_micro": recall_score(labels, preds, average="micro"),
+            "cohen_kappa": cohen_kappa_score(labels, preds),
+            "matthews_corrcoef": matthews_corrcoef(labels, preds),
         }
+
+        # ROC-AUC: Only meaningful if more than one class in truth/labels
+        try:
+            if len(np.unique(labels)) == 2:
+                # binary
+                results["roc_auc"] = roc_auc_score(labels, logits[:, 1])
+            else:
+                # multi-class
+                results["roc_auc_ovr"] = roc_auc_score(labels, logits, multi_class="ovr", average="macro")
+        except Exception:
+            results["roc_auc"] = float("nan")
+
+        return results
 
     # ------------------------
     # ----- 모델 초기화 -------
@@ -151,7 +195,7 @@ class PCOSKFoldTrainer:
     def hp_space(self, trial):
         # Optuna / WandB에서 조정할 파라미터 공간 정의
         return {
-            "learning_rate": trial.suggest_float("learning_rate", 1e-5, 5e-4, log=True),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-5, 6e-5, log=True),
             "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.1),
             "warmup_ratio": trial.suggest_float("warmup_ratio", 0.0, 0.2),
             "per_device_train_batch_size": trial.suggest_categorical("per_device_train_batch_size", [16, 32, 64]),
@@ -193,7 +237,9 @@ class PCOSKFoldTrainer:
 
         model = self.init_model()
 
-        trainer = Trainer(
+        # trainer = Trainer(
+        trainer = WeightedLossTrainer(
+            class_weights='auto',   # ← None이면 기존 CE 
             model=model,
             args=args,
             train_dataset=train_dataset,
@@ -238,13 +284,12 @@ class PCOSKFoldTrainer:
         )
 
         train_dataset = HFVisionDataset(train_base)
-        val_dataset = HFVisionDataset(val_base)
+        val_dataset   = HFVisionDataset(val_base)
 
         # 모델 초기화
         model = self.init_model()
 
         # Logging 선택
-        report_to = []
         if self.logging_backend == "wandb":
             report_to = ["wandb"]
         elif self.logging_backend == "tensorboard":
@@ -252,36 +297,33 @@ class PCOSKFoldTrainer:
         else:
             report_to = ["none"]
 
-        # TrainingArguments
         args = TrainingArguments(
-            output_dir=f"{self.result_root_dir}/pcos_fold_{fold_idx}",
+            output_dir=f"{self.result_root_dir}/train_fold_{fold_idx}",
             learning_rate=self.learning_rate,
-            optim=self.optim_name,                     # "grokadamw", "apollo_adamw", "stable_adamw"
+            optim=self.optim_name,
             weight_decay=self.weight_decay,
-            lr_scheduler_type=self.lr_scheduler_type, # "linear", "cosine", "constant_with_warmup"
+            lr_scheduler_type=self.lr_scheduler_type,
             warmup_ratio=self.warmup_ratio,
             per_device_train_batch_size=self.batch_size,
             per_device_eval_batch_size=self.batch_size,
+            dataloader_num_workers=16,
+            dataloader_pin_memory=True,
             num_train_epochs=self.num_epochs,
             eval_strategy="epoch",
-            save_strategy="epoch",
-            load_best_model_at_end=True,
-            metric_for_best_model="f1",
-            save_total_limit=2,
+            save_strategy="epoch",              
+            save_total_limit = 5,
+            metric_for_best_model="f1_macro",
             logging_dir=f"{self.result_root_dir}/logs_fold_{fold_idx}",
             report_to=report_to,
-            run_name=f"pcos_fold_{fold_idx}" if self.logging_backend == "wandb" else None,
-            ddp_find_unused_parameters=False,
+            run_name=f"train_fold_{fold_idx}" if self.logging_backend == "wandb" else None,
             fp16=self.fp16,
             bf16=self.bf16,
             gradient_accumulation_steps=self.grad_accum_steps,
-            optim_target_modules=self.optim_target_modules if self.optim_target_modules is not None else None,
-            local_rank= int(os.getenv("LOCAL_RANK", -1)) if self.distributed else -1,
-            ddp_backend="auto" if self.distributed else None
         )
 
-        # Trainer 설정
-        trainer = Trainer(
+        # trainer = Trainer(
+        trainer = WeightedLossTrainer(
+            class_weights='auto',   # ← None이면 기존 CE 
             model=model,
             args=args,
             train_dataset=train_dataset,
@@ -289,26 +331,40 @@ class PCOSKFoldTrainer:
             compute_metrics=self.compute_metrics,
         )
 
+        # ---------- Train ----------
         trainer.train()
-        metrics = trainer.evaluate()
 
-        print(f"[Fold {fold_idx}] {metrics}")
+        # ---------- Val 평가 ----------
+        val_metrics = trainer.evaluate()
+        print(f"[Fold {fold_idx}] Val Metrics:", val_metrics)
 
-        return metrics, model
+        # ---------- Test 평가 (바로 실행) ----------
+        test_metrics, _ = self.evaluate_test_for_fold(model, fold_idx)
+
+        # ---------- 메모리 정리 ----------
+        import gc
+        del trainer
+        del model
+        torch.cuda.empty_cache()
+        gc.collect()
+
+        return val_metrics, test_metrics
 
     # ------------------------
     # ----- 전체 Fold 실행 ----
     # ------------------------
     def run_kfold(self):
-        fold_results = []
-        best_models = []
+        all_val_results = []
+        all_test_results = []
 
         for fold_idx, (fold_train_df, fold_val_df) in enumerate(self.folds):
-            metrics, model = self.train_one_fold(fold_idx, fold_train_df, fold_val_df)
-            fold_results.append(metrics)
-            best_models.append(model)
+            print(f"\n===== Running Fold {fold_idx} =====")
+            val_metrics, test_metrics = self.train_one_fold(fold_idx, fold_train_df, fold_val_df)
 
-        return fold_results, best_models
+            all_val_results.append({"fold": fold_idx, "metrics": val_metrics})
+            all_test_results.append({"fold": fold_idx, "metrics": test_metrics})
+
+        return all_val_results, all_test_results
 
     # ------------------------
     # ----- Test Set 평가 -----
@@ -316,7 +372,6 @@ class PCOSKFoldTrainer:
     def evaluate_test_for_fold(self, model, fold_idx):
         print(f"\n======= Evaluating Test Set (Fold {fold_idx}) =======")
 
-        # Test dataset
         test_base = PCOSDataset(
             self.test_df,
             self.data_root_dir,
@@ -327,16 +382,25 @@ class PCOSKFoldTrainer:
         )
         test_dataset = HFVisionDataset(test_base)
 
+        # trainer = Trainer(
         trainer = Trainer(
             model=model,
+            args=TrainingArguments(
+                output_dir=f"{self.result_root_dir}/test_fold_{fold_idx}",
+                per_device_eval_batch_size=self.batch_size,
+                dataloader_num_workers=8,
+                dataloader_pin_memory=True,
+                fp16=self.fp16,
+                bf16=self.bf16,
+                report_to="none"
+            ),
             compute_metrics=self.compute_metrics
         )
 
-        # Metrics
+
         metrics = trainer.evaluate(test_dataset)
         print(f"[Fold {fold_idx}] Test Metrics:", metrics)
 
-        # Prediction
         raw_pred = trainer.predict(test_dataset)
         logits = raw_pred.predictions
         preds = np.argmax(logits, axis=1)
@@ -347,30 +411,21 @@ class PCOSKFoldTrainer:
             "pred": preds
         })
 
-        # Save path (fold-aware)
-        save_dir = os.path.join(self.result_root_dir, "test", f"fold_{fold_idx}")
+        save_dir = os.path.join(self.result_root_dir, f"test_fold_{fold_idx}")
         os.makedirs(save_dir, exist_ok=True)
 
         save_path = os.path.join(save_dir, "test_results.csv")
         df_result.to_csv(save_path, index=False)
+        
+        # test_metrics.csv 추가
+        test_metrics_path = os.path.join(save_dir, "test_metrics.csv")
+        metrics_clean = {k: _safe_value(v) for k, v in metrics.items()}
+
+        pd.DataFrame([metrics_clean]).round(3).to_csv(test_metrics_path, index=False)
 
         print(f"[Saved] Fold {fold_idx} test results saved at: {save_path}")
 
         return metrics, df_result
-
-    def evaluate_all_folds(self, models):
-        print("\n======= Running Test Evaluation on ALL FOLDS =======")
-        
-        all_results = []
-        
-        for fold_idx, model in enumerate(models):
-            metrics, df_result = self.evaluate_test_for_fold(model, fold_idx)
-            all_results.append({
-                "fold": fold_idx,
-                "metrics": metrics
-            })
-
-        return all_results
 
 
 
@@ -414,8 +469,6 @@ if __name__ == "__main__":
         wandb_project=args.wandb_project
     )
 
-    fold_results, models = trainer.run_kfold()
-
-    # 모든 fold 모델에 대해 test evaluation 실행
-    test_results = trainer.evaluate_all_folds(models)
-    print(test_results)
+    val_results, test_results = trainer.run_kfold()
+    print("Val results per fold:", val_results)
+    print("Test results per fold:", test_results)

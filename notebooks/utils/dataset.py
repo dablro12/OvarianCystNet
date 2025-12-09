@@ -107,7 +107,7 @@ class PCOSDataset(Dataset):
     def load_image(self, path):
         if not os.path.exists(path):
             print(f"[Warning] Image not found: {path} — skipping.")
-            return Image.new("RGB", (224, 224), color=(0, 0, 0))  # 빈 이미지 반환
+            raise FileNotFoundError(f"Image not found: {path}")
         
         return Image.open(path).convert("RGB")
 
@@ -215,3 +215,82 @@ def default_run(data_root_dir, label_path):
     test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=4)
     
     return kfold_loaders, test_loader
+
+
+from PIL import Image
+import torch
+from torch.utils.data import Dataset
+from torchvision import transforms
+import os
+
+def generate_bag_dict(df, image_root_dir):
+    bag_dict = {}
+    for pid, group in df.groupby("pid"):
+        files = group["filename"].tolist()
+        label = group["label"].iloc[0] # pid의 label 은 모두 동일함(기존&변경 모두 확인완료)
+        bag_dict[pid] = {
+            "files": files,
+            "label": label
+        }
+        
+    for pid in bag_dict:
+        bag_dict[pid]['paths'] = {f"{image_root_dir}/{fname}.png" for fname in bag_dict[pid]['files']}
+    return bag_dict
+
+
+
+class PCOSMILDataset(Dataset):
+    def __init__(self, df, image_root_dir, transform=None, label_mapping=None):
+        """
+        df → fold dataframe
+        label_mapping → {raw_label → numeric_label}
+        """
+        self.bag_dict = generate_bag_dict(df, image_root_dir)
+        self.pids = list(self.bag_dict.keys())
+        self.transform = transform
+        self.label_mapping = label_mapping   # 🔥 label mapping 적용
+
+    def __len__(self):
+        return len(self.pids)
+
+    def load_image(self, path):
+        if not os.path.exists(path):
+            print(f"[Warning] Image not found: {path}")
+            raise FileNotFoundError(f"Image not found: {path}")
+        return Image.open(path).convert("RGB")
+
+    def __getitem__(self, idx):
+        pid = self.pids[idx]
+        bag = self.bag_dict[pid]
+
+        img_paths = bag["paths"]
+        raw_label = bag["label"]            # 🔥 raw label (예: 0 or 2)
+
+        # -------------------------------
+        # 🔥 label_mapping 적용 (중요)
+        # -------------------------------
+        if self.label_mapping is not None:
+            try:
+                numeric_label = self.label_mapping[raw_label]
+            except KeyError:
+                raise ValueError(f"[ERROR] raw_label={raw_label} not found in label_mapping={self.label_mapping}")
+        else:
+            numeric_label = raw_label   # fallback
+
+        images = []
+        for img_path in img_paths:
+            img = self.load_image(img_path)
+            if self.transform:
+                img = self.transform(img)
+            images.append(img)
+
+        if len(images) == 0:
+            raise ValueError(f"No images found for pid={pid}")
+
+        bag_tensor = torch.stack(images, dim=0)
+
+        return {
+            "filename": bag["files"],
+            "images": bag_tensor,
+            "label": torch.tensor(numeric_label, dtype=torch.long)  # 🔥 CrossEntropyLoss safe
+        }
