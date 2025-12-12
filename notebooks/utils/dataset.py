@@ -115,7 +115,9 @@ class PCOSDataset(Dataset):
         row = self.df.iloc[idx]
 
         filename = row[self.filename_col]
-        img_path = os.path.join(self.data_root, filename + '.png')
+        img_path = os.path.join(self.data_root, filename)
+        if not img_path.lower().endswith(".png"):
+            img_path = img_path + ".png"
 
         image = self.load_image(img_path)
 
@@ -136,7 +138,7 @@ class PCOSDataset(Dataset):
 
 
 class HFVisionDataset(torch.utils.data.Dataset):
-    def __init__(self, base_dataset, processor = None):
+    def __init__(self, base_dataset, processor=None):
         self.base = base_dataset
         self.processor = processor
 
@@ -146,25 +148,38 @@ class HFVisionDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         image, label = self.base[idx]
 
-        # PIL or tensor → processor(pixel_values=...) 변환
+        # label은 int (single-label classification 가정)
+        label = int(label)
 
-        # 배치 차원 제거
-        if self.processor:
+        # 1) base_dataset에서 이미 transform으로 Tensor를 만들었다면 그대로 사용
+        if isinstance(image, torch.Tensor):
+            # shape: [3,H,W] 여야 함
+            pixel_values = image
+            if pixel_values.dim() == 4 and pixel_values.size(0) == 1:
+                pixel_values = pixel_values.squeeze(0)  # 혹시 [1,3,H,W]로 들어오면 제거
+            return {
+                "pixel_values": pixel_values,
+                "labels": torch.tensor(label, dtype=torch.long),
+            }
+
+        # 2) PIL 이미지라면 processor로 변환
+        if self.processor is not None:
             encoded = self.processor(images=image, return_tensors="pt")
+            pixel_values = encoded["pixel_values"].squeeze(0)  # ✅ [1,3,H,W] → [3,H,W]
             return {
-                "pixel_values": encoded.pixel_values,                             # Trainer가 이 키를 사용
-                "labels": torch.tensor(label, dtype=torch.long),   # 정수 레이블
-            }
-        else:
-            return {
-            "pixel_values": image,                             # Trainer가 이 키를 사용
-            "labels": torch.tensor(label, dtype=torch.long),   # 정수 레이블
+                "pixel_values": pixel_values,
+                "labels": torch.tensor(label, dtype=torch.long),
             }
 
+        # 3) processor도 없고 tensor도 아니면 (거의 안 쓰지만) 에러 방지용
+        raise ValueError(
+            "HFVisionDataset: image is not a Tensor, and processor is None. "
+            "Provide a processor or make base_dataset return a Tensor via transform."
+        )
 
 
 import pandas as pd 
-from utils.transform import get_transform, SpeckleNoise, AddGaussianNoise
+from notebooks.utils.transform import get_transform, SpeckleNoise, AddGaussianNoise
 from torch.utils.data import DataLoader
 from torchvision import transforms
 

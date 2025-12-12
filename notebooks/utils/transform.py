@@ -26,8 +26,7 @@ class AddGaussianNoise(object):
     def __repr__(self):
         return self.__class__.__name__ + f'(mean={self.mean}, std={self.std})'
 
-
-def get_transform(train_transform=None):
+def get_transform(train_transform=None, default_height_size = 224, default_width_size = 224, image_mean = [0.485, 0.456, 0.406], image_std = [0.229, 0.224, 0.225]):
     """
     Return train and val transforms with optional augmentation.
     
@@ -46,11 +45,11 @@ def get_transform(train_transform=None):
         train_transform = []
 
     # Base transform (공통)
-    base_resize = transforms.Resize((224, 224))
+    base_resize = transforms.Resize((default_height_size, default_width_size))
     base_to_tensor = transforms.ToTensor()
     base_norm = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
+        mean= image_mean,
+        std= image_std
     )
 
     # Train Transform

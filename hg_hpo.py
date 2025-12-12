@@ -1,4 +1,4 @@
-# hg_tuning.py
+# hg_hpo.py
 import os
 import numpy as np
 import pandas as pd
@@ -18,8 +18,6 @@ from notebooks.utils.dataset import (
     stratified_split_by_pid,
     stratified_pid_kfold,
 )
-from transformers import EarlyStoppingCallback
-from transformers import AutoImageProcessor
 from notebooks.utils.transform import get_transform
 from torchvision import transforms
 def _safe_value(v):
@@ -56,7 +54,7 @@ class PCOSKFoldTrainer:
         optim_name: str = "adamw_torch",      # "grokadamw", "stable_adamw", "apollo_adamw", "adamw_torch"...
         weight_decay: float = 0.05,
         lr_scheduler_type: str = "cosine",    # "linear", "cosine", "constant_with_warmup" ...
-        warmup_ratio: float = 0.05, # 초반 학습을 더 부드럽게 만들어 Loss Blow-Up방지
+        warmup_ratio: float = 0.2, # 초반 학습을 더 부드럽게 만들어 Loss Blow-Up방지
         fp16: bool = False,
         bf16: bool = False,
         grad_accum_steps: int = 1,
@@ -88,6 +86,7 @@ class PCOSKFoldTrainer:
         self.model_cache_dir = model_cache_dir
         self.data_root_dir = data_root_dir
         self.label_path = label_path
+        self.label_col_name = label_col_name
         self.result_root_dir = result_root_dir
         self.num_epochs = num_epochs
         self.learning_rate = learning_rate
@@ -113,35 +112,23 @@ class PCOSKFoldTrainer:
 
         # Load CSV
         self.label_df = pd.read_csv(label_path)
-        self.label_col_name = label_col_name
 
         # Label mapping
         self.label_mapping = create_label_mapping(self.label_df, self.label_col_name)
-        
-        self.processor = AutoImageProcessor.from_pretrained(
-            self.model_name,
-            cache_dir=self.model_cache_dir,
-        )
+
         # Transform
         self.train_tf, self.val_tf = get_transform(
             train_transform=[
                 transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
                 transforms.RandomRotation(10),
-            ],
-            default_height_size=self.processor.size["height"],
-            default_width_size=self.processor.size["width"],
-            image_mean=self.processor.image_mean,
-            image_std=self.processor.image_std,
+            ]
         )
 
         # Train/Val/Test split
-        self.train_df, self.val_df, self.test_df = stratified_split_by_pid(
-            self.label_df, label_col=self.label_col_name
-        )
+        self.train_df, self.val_df, self.test_df = stratified_split_by_pid(self.label_df, label_col=self.label_col_name)
         self.tune_df = pd.concat([self.train_df, self.val_df]).reset_index(drop=True)
-        self.folds = stratified_pid_kfold(
-            self.tune_df, n_splits=self.n_splits, label_col=self.label_col_name
-        )
+        self.folds = stratified_pid_kfold(self.tune_df, n_splits=self.n_splits, label_col=self.label_col_name)
 
     # ------------------------
     # ----- Metrics ----------
@@ -228,6 +215,7 @@ class PCOSKFoldTrainer:
 
         return results
 
+
     # ------------------------
     # ----- 모델 초기화 -------
     # ------------------------
@@ -245,13 +233,34 @@ class PCOSKFoldTrainer:
 
         return model
     def hp_space(self, trial):
-        # Optuna / WandB에서 조정할 파라미터 공간 정의
+        """
+        Define the hyperparameter search space.
+        - Optuna/Ray: receives an actual trial object.
+        - WandB: receives None, so we must return a sweep config dict.
+        """
+        # WandB backend passes trial=None and expects a sweep configuration
+        if trial is None:
+            return {
+                "method": "random",
+                "metric": {"name": "eval/f1", "goal": "maximize"},
+                "parameters": {
+                    "learning_rate": {
+                        "min": 1e-6,
+                        "max": 1e-4,
+                        "distribution": "log_uniform",
+                    },
+                    # 추가 파라미터는 필요 시 여기에 정의
+                    # "weight_decay": {"min": 0.0, "max": 0.1},
+                    # "warmup_ratio": {"min": 0.0, "max": 0.2},
+                },
+            }
+
+        # Optuna/Ray trial flow
         return {
-            "learning_rate": trial.suggest_float("learning_rate", 1e-5, 6e-5, log=True),
-            "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.1),
-            "warmup_ratio": trial.suggest_float("warmup_ratio", 0.0, 0.2),
-            "per_device_train_batch_size": trial.suggest_categorical("per_device_train_batch_size", [16, 32, 64]),
-            "lr_scheduler_type": trial.suggest_categorical("lr_scheduler_type", ["linear", "cosine"]),
+            "learning_rate": trial.suggest_float("learning_rate", 1e-6, 1e-4, log=True),
+            # "weight_decay": trial.suggest_float("weight_decay", 0.0, 0.1),
+            # "warmup_ratio": trial.suggest_float("warmup_ratio", 0.0, 0.2),
+            # "lr_scheduler_type": trial.suggest_categorical("lr_scheduler_type", ["linear", "cosine"]),
         }
 
     def run_hpo_on_fold0(self, n_trials=20, backend="optuna"):
@@ -277,23 +286,38 @@ class PCOSKFoldTrainer:
 
         train_dataset = HFVisionDataset(train_base)
         val_dataset   = HFVisionDataset(val_base)
-
+        # Logging 선택
+        if self.logging_backend == "wandb":
+            report_to = ["wandb"]
+        elif self.logging_backend == "tensorboard":
+            report_to = ["tensorboard"]
+        else:
+            report_to = ["none"]
+            
         # 기본 arguments (여기 값들은 HPO에서 덮어씀)
         args = TrainingArguments(
-            output_dir=f"{self.result_root_dir}/hpo_fold0",
             num_train_epochs=self.num_epochs,
-            evaluation_strategy="epoch",
-            save_strategy="no",       # HPO 단계에선 굳이 저장 X
-            report_to="none",
+            save_strategy="no",
+            report_to=report_to,
+            run_name=f"hpo_fold0_{self.logging_backend}",
+            per_device_train_batch_size=self.batch_size,  # 기본값
+            per_device_eval_batch_size=self.batch_size,
+            dataloader_num_workers=16,
+            dataloader_pin_memory=True,
+            learning_rate=self.learning_rate,
+            warmup_ratio=self.warmup_ratio,
+            lr_scheduler_type=self.lr_scheduler_type,
+            weight_decay=self.weight_decay,
+            metric_for_best_model="f1",
+            greater_is_better=True,
+            logging_dir=f"{self.result_root_dir}/logs_hpo_fold0",
+            fp16=self.fp16,
+            bf16=self.bf16
         )
-
-        model = self.init_model()
-
         # trainer = Trainer(
         trainer = WeightedLossTrainer(
-            class_weights='auto',   # ← None이면 기존 CE 
-            model_init=model,
-            loss_type="poly1_focal",
+            class_weights='auto',
+            model_init=self.init_model,   # ← 함수 자체를 전달해야 함 (중요)
             args=args,
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
@@ -309,7 +333,6 @@ class PCOSKFoldTrainer:
 
         print("Best run:", best_run)
         print("Best hyperparameters:", best_run.hyperparameters)
-
         return best_run
 
     # ------------------------
@@ -365,9 +388,7 @@ class PCOSKFoldTrainer:
             eval_strategy="epoch",
             save_strategy="epoch",              
             save_total_limit = 5,
-            metric_for_best_model="eval_loss",
-            greater_is_better=False,
-            load_best_model_at_end=True,
+            metric_for_best_model="f1",
             logging_dir=f"{self.result_root_dir}/logs_fold_{fold_idx}",
             report_to=report_to,
             run_name=f"train_fold_{fold_idx}" if self.logging_backend == "wandb" else None,
@@ -384,7 +405,6 @@ class PCOSKFoldTrainer:
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
             compute_metrics=self.compute_metrics,
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=5)]
         )
 
         # ---------- Train ----------
@@ -466,7 +486,7 @@ class PCOSKFoldTrainer:
 
         # 예측 클래스 확률 및 (binary일 경우) 양성 확률
         prob_pred = probs[np.arange(len(preds)), preds]
-        prob_pos = probs[:, 1] if probs.shape[1] > 1 else prob_pred
+        prob_pos = probs[:, 1] if probs.shape[1] > 1 else prob_pred 
 
         df_result = pd.DataFrame({
             "filename": self.test_df["filename"].values,
@@ -493,25 +513,23 @@ class PCOSKFoldTrainer:
 
         return metrics, df_result
 
-
-
 # ----------------------------
 # Example Usage
 # ----------------------------
 import argparse
-
+import json 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run PCOS KFold Training & Evaluation.")
 
     parser.add_argument('--model_name', type=str, default="google/vit-base-patch16-224")
     parser.add_argument('--model_cache_dir', type=str, default="/workspace/pcos_dataset/models")
     parser.add_argument('--data_root_dir', type=str, default="/workspace/pcos_dataset/Dataset")
-    parser.add_argument('--label_path', type=str, default="/workspace/pcos_dataset/labels/기존_Dataset_info.csv")
-    parser.add_argument('--label_col_name', type=str, default="label")
-    parser.add_argument('--result_root_dir', type=str, default="/workspace/pcos_dataset/results/baseline_기존라벨")
-    parser.add_argument('--num_epochs', type=int, default=5)
-    parser.add_argument('--learning_rate', type=float, default=6e-6)
-    parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--label_path', type=str, default="/workspace/pcos_dataset/labels/통합_Dataset_info_binary.csv")
+    parser.add_argument('--label_col_name', type=str, default="USG_Ontology")
+    parser.add_argument('--result_root_dir', type=str, default="/workspace/pcos_dataset/results/hpo_search/binary/vit-base-patch16-224")
+    parser.add_argument('--num_epochs', type=int, default=30)
+    parser.add_argument('--learning_rate', type=float, default=5e-4)
+    parser.add_argument('--batch_size', type=int, default=160)
     parser.add_argument('--n_splits', type=int, default=5)
     parser.add_argument('--gpu_id', type=int, default=1)
     parser.add_argument('--distributed', action='store_true', default=False, help='Enable multi-GPU distributed training')
@@ -536,7 +554,9 @@ if __name__ == "__main__":
         logging_backend=args.logging_backend,
         wandb_project=args.wandb_project
     )
-
-    val_results, test_results = trainer.run_kfold()
-    print("Val results per fold:", val_results)
-    print("Test results per fold:", test_results)
+    # HPO 실행
+    best_run = trainer.run_hpo_on_fold0(n_trials=10, backend='optuna')
+    hp = best_run.hyperparameters
+    save_path = os.path.join(args.result_root_dir, "hpo_results.json")
+    with open(save_path, "w") as f:
+        json.dump(hp, f, indent=4)

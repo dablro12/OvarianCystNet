@@ -19,7 +19,6 @@ from notebooks.utils.dataset import (
     stratified_pid_kfold,
 )
 from transformers import EarlyStoppingCallback
-from transformers import AutoImageProcessor
 from notebooks.utils.transform import get_transform
 from torchvision import transforms
 def _safe_value(v):
@@ -117,21 +116,24 @@ class PCOSKFoldTrainer:
 
         # Label mapping
         self.label_mapping = create_label_mapping(self.label_df, self.label_col_name)
-        
-        self.processor = AutoImageProcessor.from_pretrained(
-            self.model_name,
-            cache_dir=self.model_cache_dir,
-        )
+
         # Transform
         self.train_tf, self.val_tf = get_transform(
             train_transform=[
+                # Baseline : Train Transform
                 transforms.RandomHorizontalFlip(p=0.5),
                 transforms.RandomRotation(10),
-            ],
-            default_height_size=self.processor.size["height"],
-            default_width_size=self.processor.size["width"],
-            image_mean=self.processor.image_mean,
-            image_std=self.processor.image_std,
+                
+                # Add Augmentation
+                # Brightness / Contrast (초음파 기계 차이 반영)
+                transforms.ColorJitter(brightness=0.2, contrast=0.2),
+                # Gaussian blur (speckle-like augmentation)
+                transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.5)),
+                # Small resized crop (관심영역 다양화)
+                transforms.RandomResizedCrop(
+                    size=224, scale=(0.9, 1.2), ratio=(0.95, 1.05) # scale의미 : 이미지 크기를 0.9~1.2배 조정 ratio 의미 : 이미지의 너비와 높이의 비율을 0.95~1.2배 조정
+                )
+            ]
         )
 
         # Train/Val/Test split
@@ -375,16 +377,17 @@ class PCOSKFoldTrainer:
             bf16=self.bf16,
             gradient_accumulation_steps=self.grad_accum_steps,
         )
-
+        model = self.init_model()
         # trainer = Trainer(
         trainer = WeightedLossTrainer(
             class_weights='auto',   # ← None이면 기존 CE 
-            model=model,
+            model_init=model,
+            loss_type="poly1_focal",
             args=args,
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
             compute_metrics=self.compute_metrics,
-            callbacks=[EarlyStoppingCallback(early_stopping_patience=5)]
+            callbacks=[EarlyStoppingCallback(early_stopping_patience=5)]  # 5 epochs 동안 성능 개선이 없으면 조기 종료
         )
 
         # ---------- Train ----------
